@@ -56,49 +56,49 @@ This should successfully do the download. Observed effects:
   
   ```
   DATA Packet
-  send time:        1677720060.834339
+  send time:        2023-03-01 19:31:08.213519
   requester addr:   127.0.0.1:3000
   Sequence num:     0
   length:           3
   payload:          hel
   
   DATA Packet
-  send time:        1677720061.3348813
+  send time:        2023-03-01 19:31:08.714056
   requester addr:   127.0.0.1:3000
   Sequence num:     3
   length:           2
   payload:          lo
   
   END Packet
-  send time:        1677720061.8348806
+  send time:        2023-03-01 19:31:09.214060
   requester addr:   127.0.0.1:3000
   Sequence num:     5
   length:           0
   payload:          
-  
+
   ```
 - output of the sender 2 process:
 
   ```
   DATA Packet
-  send time:        1677720061.8352304
+  send time:        2023-03-01 19:31:09.214329
   requester addr:   127.0.0.1:3000
   Sequence num:     5
   length:           3
   payload:           wo
   
   DATA Packet
-  send time:        1677720062.335757
+  send time:        2023-03-01 19:31:09.714869
   requester addr:   127.0.0.1:3000
   Sequence num:     8
   length:           3
   payload:          rld
   
   END Packet
-  send time:        1677720062.8357713
+  send time:        2023-03-01 19:31:10.214868
   requester addr:   127.0.0.1:3000
   Sequence num:     11
   length:           0
   payload:          
-  
+
   ```

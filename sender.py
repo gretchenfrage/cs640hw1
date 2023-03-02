@@ -2,6 +2,7 @@
 from argparse import ArgumentParser
 from socket import socket as create_socket, AF_INET, SOCK_DGRAM
 from time import time, sleep
+from datetime import datetime
 
 from common import *
 
@@ -63,7 +64,7 @@ def print_sender_packet(packet, send_to):
         )
 
     print(f"{packet.packet_type.name} Packet")
-    print(f"send time:        {time()}")
+    print(f"send time:        {datetime.now()}")
     print(f"requester addr:   {send_to[0]}:{send_to[1]}")
     print(f"Sequence num:     {packet.sequence_num}")
     print(f"length:           {len(payload)}")
