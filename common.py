@@ -87,11 +87,13 @@ EndPacket = packet_data_type('EndPacket', ['sequence_num'])
 # ==== packet data type encoding/decoding ====
 
 '''
-Struct format string (as used in the python's struct packing) representing the
-binary format of the non-payload part of our packets.
+Struct format string (as used in python's struct packing module) representing
+the binary format of the non-payload part of our packets.
+
+! makes it network order.
 
 Fields are:
-- packet type (8 bit character)
+- packet type (8 bit unsigned int)
 - sequence number (32-bit unsigned int)
 - length (32-bit unsigned int)
 
