@@ -62,8 +62,8 @@ def print_sender_packet(packet, send_to):
             f" print_sender_packet"
         )
 
-    print(f"{packet.packet_type.key} Packet")
-    print(f"send time:        {now()}")
+    print(f"{packet.packet_type.name} Packet")
+    print(f"send time:        {time()}")
     print(f"requester addr:   {send_to[0]}:{send_to[1]}")
     print(f"Sequence num:     {packet.sequence_num}")
     print(f"length:           {len(payload)}")
@@ -91,12 +91,14 @@ class PacketSeqSender:
     ):
         self.socket = socket
         self.rate_limiter = rate_limiter
-        self.send_to = (remote_addr, send_to_port)
+        self.send_to = (remote_addr[0], send_to_port)
         self.next_sequence_num = sequence_start
 
-    def __dispense_sequence_num(self):
+    def __dispense_sequence_num(self, payload_len):
         sequence_num = self.next_sequence_num
-        self.next_sequence_num += 1
+        # "For example, if the first seq_no is 50 and the payload size is 10
+        # bytes, then the next seq_no should be 60."
+        self.next_sequence_num += payload_len
         return sequence_num
 
     def __send_packet_inner(self, packet):
@@ -108,14 +110,14 @@ class PacketSeqSender:
     def send_data_packet(self, payload):
         ''' Send a data packet, including rate limiting and printing. '''
         self.__send_packet_inner(DataPacket(
-            sequence_num=self.__dispense_sequence_num(),
+            sequence_num=self.__dispense_sequence_num(len(payload)),
             payload=payload,
         ))
 
     def send_end_packet(self):
         ''' Send an end packet, including rate limiting and printing. '''
         self.__send_packet_inner(EndPacket(
-            sequence_num=self.__dispense_sequence_num(),
+            sequence_num=self.__dispense_sequence_num(0),
         ))
 
 
