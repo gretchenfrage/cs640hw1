@@ -139,7 +139,9 @@ def print_receiver_packet_summary(packet,received_from):
     print(f"sender addr:   {received_from[0]}:{received_from[1]}")
     print(f"Total Data packets:     {dic[address]['DataPackets']}")
     print(f"Total Data bytes:          {dic[address]['DataBytes']}")
-    print(f"Average packets/second:          {dic[address]['DataPackets']/totalDurationInSecs}")
+    avg_pps = dic[address]['DataPackets'] / totalDurationInSecs
+    avg_pps = int(round(avg_pps))
+    print(f"Average packets/second:          {avg_pps}")
     print(f"Duration of the test:         {totalDurationInSecs*1000} ms")
     print()
 
