@@ -66,9 +66,14 @@ sequence number of the packet that is being acknowledged."
 
 #### (Inner) length
 
-"In case the packet type is a request, the packet length should be set to 0."
-However, it also doesn't seem like an End packet would have any content. So,
-I guess really only a Data packet can have a non-zero length.
+OBSOLETED: "In case the packet type is a request, the packet length should be
+           set to 0." However, it also doesn't seem like an End packet would
+           have any content. So, I guess really only a Data packet can have a
+           non-zero length.
+
+Addendum (HW2): "The inner length field of the request packet will be filled
+with this window size so that the sender can extract and use this value for
+sending.
 
 "The length parameter will always be less than 5KB." So, that's a possibly
 convenient assumption we're allowed to make.
@@ -145,7 +150,7 @@ def inner_packet_data_type(name, fields):
     return outer_constructor
 
 ''' Representation of a request packet. '''
-RequestPacket = inner_packet_data_type('RequestPacket', ['file_name'])
+RequestPacket = inner_packet_data_type('RequestPacket', ['file_name', 'window_size'])
 
 ''' Representation of a data packet. '''
 DataPacket = inner_packet_data_type('DataPacket', ['sequence_num', 'payload'])
@@ -226,7 +231,7 @@ def encode_inner_packet(packet):
     # type-specific logic to get sequence_num, length, and payload values
     if packet.packet_type == PacketType.REQUEST:
         sequence_num = 0
-        length = 0
+        length = packet.window_size
         payload = packet.file_name.encode('utf-8')
     elif packet.packet_type == PacketType.DATA:
         sequence_num = packet.sequence_num
@@ -296,8 +301,7 @@ def decode_inner_packet(binary):
     # type-specific logic to convert to python type
     if packet_type == PacketType.REQUEST:
         assert (sequence_num == 0), "malformed packet"
-        assert (length == 0), "malformed packet"
-        return RequestPacket(file_name=payload.decode('utf-8'))
+        return RequestPacket(file_name=payload.decode('utf-8'), window_size=length)
     elif packet_type == PacketType.DATA:
         assert (length == len(payload)), "malformed packet"
         return DataPacket(sequence_num=sequence_num, payload=payload)
@@ -341,6 +345,21 @@ if __name__ == '__main__':
         dst_ip_address='127.0.0.1',
         dst_port=80,
         inner=AckPacket(sequence_num=4)
+    )
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
+
+    packet = OuterPacket(
+        priority=PriorityLevel.Medium,
+        src_ip_address='82.123.92.0',
+        src_port=25565,
+        dst_ip_address='127.0.0.1',
+        dst_port=80,
+        inner=RequestPacket(file_name='foo.txt', window_size=70)
     )
     print(f"packet = {repr(packet)}")
     encoded = encode_packet(packet)
