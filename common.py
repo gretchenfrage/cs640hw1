@@ -1,21 +1,70 @@
 
 from enum import Enum
 from collections import namedtuple
+from ipaddress import IPv4Address
 import struct
 
 '''
 What's in a packet?
 
+
+Outer packet (added in HW2)
+---------------------------
+
+#### Priority
+
+"
+    Valid values for priority levels are:
+
+    0x01 - highest priority
+    0x02 - medium priority
+    0x03 - lowest priority
+"
+
+"All the packets sent by the requester should have priority 1."
+
+"The priority of the END packet is the same as the other packets in the flow."
+
+#### Source IP address
+
+32-bit IP address
+
+#### Source port
+
+16 bits
+
+#### Destination IP address
+
+32-bit IP address
+
+#### Destination port
+
+16 bits
+
+#### (Outer) length
+
+"The length field of the outer packet is set to the total size of the inner
+packet, i.e. inner packet header size + inner packet payload size."
+
+
+Inner packet
+------------
+
 #### Packet type
 
 All packets have a packet type. One of Request, Data, or End.
+
+Addendum (HW2): Ack packet type.
 
 #### Sequence number
 
 "For Request packets, the sequence field is set to 0." It is thus implied
 that both Data and End packets have settable sequence numbers.
 
-#### Length
+Addendum (HW2): "For the ack packet ... the sequence field will contain the
+sequence number of the packet that is being acknowledged."
+
+#### (Inner) length
 
 "In case the packet type is a request, the packet length should be set to 0."
 However, it also doesn't seem like an End packet would have any content. So,
@@ -43,17 +92,38 @@ Additional things to keep in mind:
 
 # ==== packet data type definitions ====
 
+class PriorityLevel(Enum):
+    ''' Valid priority level as described by assignment.
+
+    The values are the byte values as they exist on the wire.
+    '''
+    Highest = 1
+    Medium = 2
+    Lowest = 3
+
+''' Representation of the outer packet, for the network emulator.
+'''
+OuterPacket = namedtuple('OuterPacket', [
+    'priority',
+    'src_ip_address',
+    'src_port',
+    'dst_ip_address',
+    'dst_port',
+    'inner',
+])
+
 class PacketType(Enum):
-    ''' Type of packet as described by assignment.
+    ''' Type of (inner) packet as described by assignment.
 
     The values are the packet type discriminant as it exists on the wire.
     '''
     REQUEST = ord('R')
     DATA = ord('D')
     END = ord('E')
+    ACK = ord('A')
 
-def packet_data_type(name, fields):
-    ''' Create a packet data type.
+def inner_packet_data_type(name, fields):
+    ''' Create a inner packet data type.
 
     This creates a data type which functions generally like namedtuple, except
     that it also has a `packet_type` field which is automatically populated
@@ -75,37 +145,83 @@ def packet_data_type(name, fields):
     return outer_constructor
 
 ''' Representation of a request packet. '''
-RequestPacket = packet_data_type('RequestPacket', ['file_name'])
+RequestPacket = inner_packet_data_type('RequestPacket', ['file_name'])
 
 ''' Representation of a data packet. '''
-DataPacket = packet_data_type('DataPacket', ['sequence_num', 'payload'])
+DataPacket = inner_packet_data_type('DataPacket', ['sequence_num', 'payload'])
 
 ''' Representation of an end packet. '''
-EndPacket = packet_data_type('EndPacket', ['sequence_num'])
+EndPacket = inner_packet_data_type('EndPacket', ['sequence_num'])
+
+''' Representation of an ack packet. '''
+AckPacket = inner_packet_data_type('AckPacket', ['sequence_num'])
 
 
 # ==== packet data type encoding/decoding ====
 
 '''
 Struct format string (as used in python's struct packing module) representing
-the binary format of the non-payload part of our packets.
+the binary format of the outer non-payload part of the packets.
 
-! makes it network order.
+! makes it network order
 
 Fields are:
-- packet type (8 bit unsigned int)
-- sequence number (32-bit unsigned int)
-- length (32-bit unsigned int)
+- priority (8-bit unsigned int)
+- src ip address (4 byte IPv4 address)
+- src port (16-bit unsigned int)
+- dst ip address (4 byte IPv4 address)
+- dst port (16-bit unsigned int)
+- (outer) length (32-bit unsigned int)
 
 See: https://docs.python.org/3/library/struct.html
 '''
-HEADER_FORMAT = "!BII"
+OUTER_HEADER_FORMAT = "!B4sH4sHI"
 
-''' Number of bytes in a header. '''
-HEADER_SIZE = 9
+''' Number of bytes in an outer header. '''
+OUTER_HEADER_SIZE = 17
+
+'''
+Struct format string (see above) representing the binary format of the inner
+non-payload part of the packets.
+
+Fields are:
+
+- packet type (8-bit unsigned int)
+- sequence number (32-bit unsigned int)
+- inner length (32-bit unsigned int)
+'''
+INNER_HEADER_FORMAT = "!BII"
+
+''' Number bytes in the part of the header that contributes to the outer
+length.
+'''
+INNER_HEADER_SIZE = 9
 
 def encode_packet(packet):
-    ''' Convert any packet type into bytes. '''
+    ''' Convert an OuterPacket into bytes. '''
+
+    inner = encode_inner_packet(packet.inner)
+    buf = bytearray(OUTER_HEADER_SIZE)
+    header = (
+        # priority
+        packet.priority.value,
+        # src ip address
+        IPv4Address(packet.src_ip_address).packed,
+        # src port
+        packet.src_port,
+        # dst ip address
+        IPv4Address(packet.dst_ip_address).packed,
+        # dst port
+        packet.dst_port,
+        # (outer) length
+        len(inner),
+    )
+    struct.pack_into(OUTER_HEADER_FORMAT, buf, 0, *header)
+    buf.extend(inner)
+    return buf
+
+def encode_inner_packet(packet):
+    ''' Convert any inner packet type into bytes. '''
 
     # type-specific logic to get sequence_num, length, and payload values
     if packet.packet_type == PacketType.REQUEST:
@@ -116,7 +232,7 @@ def encode_packet(packet):
         sequence_num = packet.sequence_num
         length = len(packet.payload)
         payload = packet.payload
-    elif packet.packet_type == PacketType.END:
+    elif packet.packet_type in [PacketType.END, PacketType.ACK]:
         sequence_num = packet.sequence_num
         length = 0
         payload = bytes()
@@ -124,18 +240,45 @@ def encode_packet(packet):
         raise Exception(f"unknown packet type {repr(packet.packet_type)}")
 
     # pack
-    buf = bytearray(HEADER_SIZE)
-    header = (
+    buf = bytearray(INNER_HEADER_SIZE)
+    header = (        
+        # packet type
         packet.packet_type.value,
+        # sequence number
         sequence_num,
+        # (inner) length
         length,
     )
-    struct.pack_into(HEADER_FORMAT, buf, 0, *header)
+    struct.pack_into(INNER_HEADER_FORMAT, buf, 0, *header)
     buf.extend(payload)
     return buf
 
 def decode_packet(binary):
-    ''' Convert encoded bytes into the appropriate packet type.
+    ''' Convert encoded bytes into an OuterPacket.
+
+    Isn't guarnateed to detect all malformed packets, but may do some debug
+    checks.'''
+    (
+        priority,
+        src_ip_address,
+        src_port,
+        dst_ip_address,
+        dst_port,
+        length,
+    ) = struct.unpack(OUTER_HEADER_FORMAT, binary[:OUTER_HEADER_SIZE])
+    inner = binary[OUTER_HEADER_SIZE:]
+    assert (length == len(inner))
+    return OuterPacket(
+        priority=PriorityLevel(priority),
+        src_ip_address=IPv4Address(src_ip_address).exploded,
+        src_port=src_port,
+        dst_ip_address=IPv4Address(dst_ip_address).exploded,
+        dst_port=dst_port,
+        inner=decode_inner_packet(inner),
+    )
+
+def decode_inner_packet(binary):
+    ''' Convert encoded bytes into the appropriate inner packet type.
 
     Isn't guarnateed to detect all malformed packets, but may do some debug
     checks.
@@ -146,9 +289,9 @@ def decode_packet(binary):
         discriminant,
         sequence_num,
         length,
-    ) = struct.unpack(HEADER_FORMAT, binary[:HEADER_SIZE])
+    ) = struct.unpack(INNER_HEADER_FORMAT, binary[:INNER_HEADER_SIZE])
     packet_type = PacketType(discriminant)
-    payload = binary[HEADER_SIZE:]
+    payload = binary[INNER_HEADER_SIZE:]
 
     # type-specific logic to convert to python type
     if packet_type == PacketType.REQUEST:
@@ -162,5 +305,46 @@ def decode_packet(binary):
         assert (length == len(payload)), "malformed packet"
         assert (len(payload) == 0), "malformed packet"
         return EndPacket(sequence_num=sequence_num)
+    elif packet_type == PacketType.ACK:
+        assert (length == len(payload)), "malformed packet"
+        assert (len(payload) == 0), "malformed packet"
+        return AckPacket(sequence_num=sequence_num)
     else:
         raise Exception(f"unknown packet type {repr(packet_type)}")
+
+
+if __name__ == '__main__':
+    # random demo of encoding and decoding you can run by running common.py
+    # directly. maybe should eventually create proper testing modules.
+    packet = OuterPacket(
+        priority=PriorityLevel.Medium,
+        src_ip_address='82.123.92.0',
+        src_port=25565,
+        dst_ip_address='127.0.0.1',
+        dst_port=80,
+        inner=DataPacket(
+            sequence_num=7,
+            payload=b"hello"
+        )
+    )
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
+
+    packet = OuterPacket(
+        priority=PriorityLevel.Medium,
+        src_ip_address='82.123.92.0',
+        src_port=25565,
+        dst_ip_address='127.0.0.1',
+        dst_port=80,
+        inner=AckPacket(sequence_num=4)
+    )
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
