@@ -73,9 +73,8 @@ class Emulator:
         loss_prob = next_hop_details[2]
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
         #doing bandwidth simulation
-        delayExpire = False
+        self.delayExpire = False
         time.sleep(delay/1000) # Convert delay from milliseconds to seconds
-        delayExpire = True
         #doing loss simulation
         if random.random() > loss_prob:
             #encoding and sending to the next hop
@@ -83,7 +82,7 @@ class Emulator:
             socket.sendto(binary, next_hop)
         else:
             self.log_event(packet,f"Packet dropped: destination {destination} lost due to loss probability")
-        pass
+        self.delayExpire = True
     
 
     def send_emulator(self,socket,next_hop_details):
@@ -112,6 +111,7 @@ def run_emulator(args):
     emulator = Emulator(hostname='0.0.0.0', port=args.bind_to_port, forwarding_table_file=args.forwarding_table, queue_size=args.queue_size)
     socket = create_socket(AF_INET, SOCK_DGRAM)
     socket.bind(("0.0.0.0", args.bind_to_port))
+    socket.setblocking(False)
 
     #binding the emulator to the port.
     while(True):
@@ -123,10 +123,10 @@ def run_emulator(args):
         request = packet
 
         next_hop_details = emulator.routing(request)
-        emulator.send_emulator(socket,next_hop_details)
+        if(emulator.delayExpire == True):
+            emulator.send_emulator(socket,next_hop_details)
 
-
-    pass
+    
 
 
 
