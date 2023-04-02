@@ -4,6 +4,33 @@ from collections import namedtuple
 from ipaddress import IPv4Address
 import struct
 
+
+# ==== "should drop" ====
+
+'''
+This is just a thing for debugging reliable transfer before the network
+emulator is finished.
+'''
+
+ENABLE_SHOULD_DROP_DEBUG_THING = False
+should_drop_counter = 0
+
+def should_drop_debug_thing(packet):
+    global should_drop_counter
+
+    if not ENABLE_SHOULD_DROP_DEBUG_THING:
+        return False
+    if packet.inner.packet_type not in [PacketType.DATA, PacketType.ACK]:
+        return False
+    should_drop_counter += 1
+    should_drop = should_drop_counter % 2 == 0
+    if should_drop:
+        print(f"debug dropping {repr(packet.inner)}\n")
+    return should_drop
+
+
+# ==== packets ====
+
 '''
 What's in a packet?
 
@@ -73,7 +100,7 @@ OBSOLETED: "In case the packet type is a request, the packet length should be
 
 Addendum (HW2): "The inner length field of the request packet will be filled
 with this window size so that the sender can extract and use this value for
-sending.
+sending."
 
 "The length parameter will always be less than 5KB." So, that's a possibly
 convenient assumption we're allowed to make.

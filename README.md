@@ -11,7 +11,7 @@ python3 requester.py [args]
 
 ## notes
 
-The `common` module contains code shhared between sender and receiver.
+The `common` module contains code shared between sender and receiver.
 
 ## example demo
 
