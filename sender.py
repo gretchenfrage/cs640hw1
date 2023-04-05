@@ -334,6 +334,8 @@ def run_sender(args):
     ), f"sender received non-request packet: {repr(packet)}"
     request = packet
 
+    print(request)
+
     # begin sending response packets
     sender = PacketSeqSender(
         socket,

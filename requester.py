@@ -171,6 +171,8 @@ def request(args):
                 window_size=args.window_size,
             ))
             binary = encode_packet(packet)
+            print("Hi")
+            print(net_send_to)
             socket.sendto(binary, net_send_to)
 
             # receive response
@@ -218,6 +220,8 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
             ))
             ack_binary = encode_packet(ack_packet)
             if not should_drop_debug_thing(ack_packet):
+                print("Hi")
+                print(net_send_to)
                 socket.sendto(ack_binary, net_send_to)
 
             # ignore packet if older than current window
