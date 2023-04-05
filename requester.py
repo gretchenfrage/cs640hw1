@@ -158,7 +158,7 @@ def request(args):
             # convenience closure to wrap packets with OuterPacket
             encapsulate = lambda inner: OuterPacket(
                 priority=PriorityLevel(1),
-                src_ip_address=src_ip_address,
+                src_ip_address=get_host_ip(),
                 src_port=src_port,
                 dst_ip_address=row.sender_hostname,
                 dst_port=row.sender_port,
@@ -171,8 +171,7 @@ def request(args):
                 window_size=args.window_size,
             ))
             binary = encode_packet(packet)
-            print("Hi")
-            print(net_send_to)
+            debug_print(f"sending {repr(packet)}")
             socket.sendto(binary, net_send_to)
 
             # receive response
@@ -199,7 +198,7 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
         # "Verify that the destination IP address in the packet is indeed its
         # own IP address"
         if not (
-            packet.dst_ip_address == socket.getsockname()[0]
+            packet.dst_ip_address == get_host_ip()
             and packet.dst_port == socket.getsockname()[1]
         ):
             # just ignoring for now, possibly it would be better to error
@@ -220,8 +219,7 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
             ))
             ack_binary = encode_packet(ack_packet)
             if not should_drop_debug_thing(ack_packet):
-                print("Hi")
-                print(net_send_to)
+                debug_print(f"sending {repr(ack_packet)}")
                 socket.sendto(ack_binary, net_send_to)
 
             # ignore packet if older than current window

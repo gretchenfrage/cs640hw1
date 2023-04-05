@@ -171,7 +171,7 @@ class PacketSeqSender:
         '''
         packet = OuterPacket(
             priority=self.priority,
-            src_ip_address=self.socket.getsockname()[0],
+            src_ip_address=get_host_ip(),
             src_port=self.socket.getsockname()[1],
             dst_ip_address=self.dst_addr,
             dst_port=self.dst_port,
@@ -182,6 +182,7 @@ class PacketSeqSender:
         print_sender_packet(packet.inner, self.send_to)
 
         if not should_drop_debug_thing(packet):
+            debug_print(f"sending {repr(packet)}")
             self.socket.sendto(binary, self.send_to)
 
     def __reset_window_state(self):
@@ -227,7 +228,7 @@ class PacketSeqSender:
                 if list_item.resend_count == 5:
                     # if reached resend count, give up and mark as acked
                     sequence_num = list_item.data_packet.sequence_num
-                    print(f"giving up on sequence num {sequence_num}")
+                    print(f"Giving up on sequence num {sequence_num}")
 
                     # mark that item in the list as acked
                     list_item.acked = True
@@ -333,8 +334,6 @@ def run_sender(args):
         packet.inner.packet_type == PacketType.REQUEST
     ), f"sender received non-request packet: {repr(packet)}"
     request = packet
-
-    print(request)
 
     # begin sending response packets
     sender = PacketSeqSender(

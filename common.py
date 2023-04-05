@@ -2,6 +2,7 @@
 from enum import Enum
 from collections import namedtuple
 from ipaddress import IPv4Address
+from socket import gethostbyname, gethostname
 import struct
 
 
@@ -27,6 +28,25 @@ def should_drop_debug_thing(packet):
     if should_drop:
         print(f"debug dropping {repr(packet.inner)}\n")
     return should_drop
+
+
+# ==== additional debug stuff ====
+
+DEBUG_PRINT = False
+
+def debug_print(s):
+    if DEBUG_PRINT:
+        print(s)
+
+
+# ==== network utilities ====
+
+def get_host_ip():
+    """ Attempt to get the public IP address of the local host.
+
+    https://stackoverflow.com/a/166520/4957011
+    """
+    return gethostbyname(gethostname())
 
 
 # ==== packets ====
