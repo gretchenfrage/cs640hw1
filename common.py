@@ -1,7 +1,7 @@
 
 from enum import Enum
 from collections import namedtuple
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, AddressValueError
 from socket import gethostbyname, gethostname
 import struct
 
@@ -47,6 +47,17 @@ def get_host_ip():
     https://stackoverflow.com/a/166520/4957011
     """
     return gethostbyname(gethostname())
+
+def resolve_ip(resolvable):
+    """ Convert a host name or IP address into an IP address.
+    """
+    try:
+        # case that it is already an IP address
+        IPv4Address(resolvable)
+        return resolvable
+    except AddressValueError:
+        # otherwise assume is a host name
+        return gethostbyname(resolvable)
 
 
 # ==== packets ====

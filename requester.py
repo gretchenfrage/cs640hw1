@@ -156,11 +156,12 @@ def request(args):
     with open(args.file_name, 'wb') as f:
         for row in tracker_row_seq:
             # convenience closure to wrap packets with OuterPacket
+            dst_ip_address=resolve_ip(row.sender_hostname)
             encapsulate = lambda inner: OuterPacket(
                 priority=PriorityLevel(1),
                 src_ip_address=get_host_ip(),
                 src_port=src_port,
-                dst_ip_address=row.sender_hostname,
+                dst_ip_address=dst_ip_address,
                 dst_port=row.sender_port,
                 inner=inner,
             )
@@ -257,12 +258,12 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
 
             # write the last window to the file
             last_window_size = window_size - window_missing_count
-            for packet in window_data_packets[:last_window_size]:
+            for data_packet in window_data_packets[:last_window_size]:
                 assert (
-                    packet is not None
+                    data_packet is not None
                 ), "END packet received, but last window received packets " \
                     "do not form a prefix"
-                file.write(packet.inner.payload)
+                file.write(data_packet.inner.payload)
 
             # print and end
             print_receiver_packet(packet.inner, remote_addr, stats)

@@ -56,8 +56,11 @@ class Emulator:
                 debug_print(f"tokens = {repr(tokens)}")
                 debug_print(f"emul_hostname = {self.emul_hostname}")
                 debug_print(f"emul_port = {self.emul_port}")
-                if (tokens[0] == self.emul_hostname and int(tokens[1]) == self.emul_port):    
-                    destination = tokens[2]+":"+str(tokens[3])
+                if (
+                    resolve_ip(tokens[0]) == resolve_ip(self.emul_hostname)
+                    and int(tokens[1]) == self.emul_port
+                ):    
+                    destination = resolve_ip(tokens[2]) + ":" + str(tokens[3])
                     next_hop = (tokens[4], int(tokens[5]))
                     delay = int(tokens[6])
                     loss_prob = float(tokens[7]) / 100
@@ -149,7 +152,8 @@ class Emulator:
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
         log_entry = f"[{timestamp}] Packet dropped: {packet.src_ip_address}:{packet.src_port} -> {packet.dst_ip_address}:{packet.dst_port} "
         #need to check what is the length inner or outer.
-        log_entry += f"Priority: {packet.priority.value}, Size: 0, Reason: {reason}"
+        payload_size = len(encode_inner_packet(packet.inner))
+        log_entry += f"Priority: {packet.priority.value}, Size: {payload_size}, Reason: {reason}"
         # log_entry += f"Priority: {packet.priority.value}, Size: {packet.inner.length}, Reason: {reason}"
         with open(self.log_file, 'a') as f:
             f.write(log_entry + '\n')

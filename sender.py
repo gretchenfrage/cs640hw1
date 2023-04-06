@@ -139,7 +139,7 @@ class PacketSeqSender:
         self.socket = socket
         self.rate_limiter = rate_limiter
         self.send_to = (net_hostname, net_port)
-        self.dst_addr = dst_addr
+        self.dst_addr = resolve_ip(dst_addr)
         self.dst_port = dst_port
         self.window_size = window_size
         self.timeout = timeout
