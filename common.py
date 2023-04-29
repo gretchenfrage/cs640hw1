@@ -154,6 +154,59 @@ Additional things to keep in mind:
 
 
 # ==== packet data type definitions ====
+# 
+#     link packet ----[is one of]----\
+#                                    |
+#     /------------------------------/
+#     |
+#     |---> outer packet ----[contains]----\
+#     |                                    |
+#     |---> heartbeat packet               |
+#     |                                    |
+#     |---> link state packet              |
+#     |                                    |
+#     |---> routetrace packet              |
+#                                          |
+#     /------------------------------------/
+#     |
+#     \---> inner packet ----[is one of]---\
+#                                          |
+#     /------------------------------------/
+#     |
+#     |---> request packet
+#     |
+#     |---> data packet
+#     |
+#     |---> end packet
+#     |
+#     |---> ack packet
+# 
+
+def packet_data_type_factory(enum, suffix):
+    def packet_data_type(name, fields):
+        assert (
+            name.endswith(suffix)
+        ), f"{repr(name)} expected to end with suffix {repr(suffix)}"
+        packet_type = enum[name.removesuffix(suffix).upper()]
+
+        inner_constructor = namedtuple(name, ['packet_type'] + fields)
+        def outer_constructor(**kwargs):
+            return inner_constructor(
+                packet_type=packet_type,
+                **kwargs,
+            )
+
+        return outer_constructor
+    return packet_data_type
+
+
+class LinkPacketType(Enum):
+    OUTER = ord('O')
+    HEARTBEAT = ord('H')
+    LINKSTATE = ord('L')
+    ROUTETRACE = ord('R')
+
+link_packet_data_type = packet_data_type_factory(LinkPacketType, 'Packet')
 
 class PriorityLevel(Enum):
     ''' Valid priority level as described by assignment.
@@ -164,15 +217,43 @@ class PriorityLevel(Enum):
     Medium = 2
     Lowest = 3
 
-''' Representation of the outer packet, for the network emulator.
+''' Representation of an outer packet, a type of link packet.
 '''
-OuterPacket = namedtuple('OuterPacket', [
+OuterPacket = link_packet_data_type('OuterPacket', [
     'priority',
     'src_ip_address',
     'src_port',
     'dst_ip_address',
     'dst_port',
     'inner',
+])
+
+''' Representation of a heartbeat packet (aka "HelloMessage"), a type of link
+packet.
+'''
+HeartbeatPacket = link_packet_data_type('HeartbeatPacket', [])
+
+''' Representation of a link state packet (aka "LinkStateMessage"), a type of
+link packet.
+'''
+LinkStatePacket = link_packet_data_type('LinkStatePacket', [
+    'creator_ip_address',
+    'creator_port',
+    'seq_no',    # integer
+    'expires',   # float unix timestamp in seconds
+    'neighbors', # list of LinkInfo
+])
+
+''' Neighbor link information within a LinkStatePacket. '''
+LinkInfo = namedtuple('NeighborLinkInfo', [
+    'ip_address',
+    'port',
+    'cost', # float
+])
+
+''' Representation of a route trace packet, a type of link packet. '''
+RouteTracePacket = link_packet_data_type('RouteTracePacket', [
+    # TODO routetrace logic
 ])
 
 class PacketType(Enum):
@@ -185,27 +266,7 @@ class PacketType(Enum):
     END = ord('E')
     ACK = ord('A')
 
-def inner_packet_data_type(name, fields):
-    ''' Create a inner packet data type.
-
-    This creates a data type which functions generally like namedtuple, except
-    that it also has a `packet_type` field which is automatically populated
-    with the corresponding `PacketType` value upon construction.
-    '''
-    SUFFIX = "Packet"
-    assert (
-        name.endswith("Packet")
-    ), f"{repr(name)} expected to end with suffix {repr(SUFFIX)}"
-    packet_type = PacketType[name.removesuffix(SUFFIX).upper()]
-
-    inner_constructor = namedtuple(name, ['packet_type'] + fields)
-    def outer_constructor(**kwargs):
-        return inner_constructor(
-            packet_type=packet_type,
-            **kwargs,
-        )
-
-    return outer_constructor
+inner_packet_data_type = packet_data_type_factory(PacketType, 'Packet')
 
 ''' Representation of a request packet. '''
 RequestPacket = inner_packet_data_type('RequestPacket', ['file_name', 'window_size'])
@@ -260,9 +321,53 @@ length.
 '''
 INNER_HEADER_SIZE = 9
 
-def encode_packet(packet):
-    ''' Convert an OuterPacket into bytes. '''
+''' Struct format string (see above) representing the non-variadic parts of the
+binary format of a link state packet.
 
+Fields are:
+- creator ip address (4 byte IPv4 address)
+- creator port (16-bit unsigned int)
+- seq no (64-bit unsigned int)
+- expires (64-bit float)
+- number of neighbors (64-bit unsigned int)
+'''
+LINK_STATE_HEADER_FORMAT = "!4sHQdQ"
+
+LINK_STATE_HEADER_SIZE = 30
+
+''' Struct format string (see above) representing a neighbor link element in
+the binary format of a link state packet.
+
+Fields are:
+- ip address (4 byte IPv4 address)
+- port (16-bit unsigned int)
+- cost (32-bit float)
+'''
+LINK_INFO_FORMAT = "!4sHf"
+
+LINK_INFO_SIZE = 10
+
+
+def encode_packet(packet):
+    ''' Convert any link packet into bytes. '''
+    if packet.packet_type == LinkPacketType.OUTER:
+        buf = encode_outer_packet(packet)
+    elif packet.packet_type == LinkPacketType.HEARTBEAT:
+        buf = bytes()
+    elif packet.packet_type == LinkPacketType.LINKSTATE:
+        buf = encode_link_state_packet(packet)
+    elif packet.packet_type == LinkPacketType.ROUTETRACE:
+        # TODO routetrace logic
+        raise Exception('unimplemented')
+    else:
+        raise Exception(f"unknown link packet type {repr(packet.packet_type)}")
+
+    buf = bytes([packet.packet_type.value]) + buf
+    return buf
+
+def encode_outer_packet(packet):
+    ''' Convert an OuterPacket into bytes, _not including the link packet type
+    byte_. '''
     inner = encode_inner_packet(packet.inner)
     buf = bytearray(OUTER_HEADER_SIZE)
     header = (
@@ -281,6 +386,45 @@ def encode_packet(packet):
     )
     struct.pack_into(OUTER_HEADER_FORMAT, buf, 0, *header)
     buf.extend(inner)
+    return buf
+
+def encode_link_state_packet(packet):
+    ''' Convert a LinkStatePacket into bytes, _not including the link packet
+    type byte_. '''
+    
+    # pack header
+    buf = bytearray(LINK_STATE_HEADER_SIZE)
+    header = (
+        # creator ip address
+        IPv4Address(packet.creator_ip_address).packed,
+        # creator port
+        packet.creator_port,
+        # seq number
+        packet.seq_no,
+        # expires
+        packet.expires,
+        # number of neighbors
+        len(packet.neighbors),
+    )
+    print(f"{repr(header)=}")
+    struct.pack_into(LINK_STATE_HEADER_FORMAT, buf, 0, *header)
+
+    # pack link info elements
+    for link_info in packet.neighbors:
+
+        link_info_buf = bytearray(LINK_INFO_SIZE)
+        link_info_args = (
+            # ip address
+            IPv4Address(link_info.ip_address).packed,
+            # port
+            link_info.port,
+            # cost
+            link_info.cost,
+        )
+        struct.pack_into(LINK_INFO_FORMAT, link_info_buf, 0, *link_info_args)
+
+        buf.extend(link_info_buf)
+
     return buf
 
 def encode_inner_packet(packet):
@@ -317,10 +461,31 @@ def encode_inner_packet(packet):
     return buf
 
 def decode_packet(binary):
-    ''' Convert encoded bytes into an OuterPacket.
+    ''' Convert encoded bytes into some type of link packet.
 
-    Isn't guarnateed to detect all malformed packets, but may do some debug
-    checks.'''
+    Isn't guaranteed to detect all malformed packets, but may do some debug
+    checks.
+    '''
+    packet_type = LinkPacketType(binary[0])
+    binary = binary[1:]
+
+    if packet_type == LinkPacketType.OUTER:
+        return decode_outer_packet(binary)
+    elif packet_type == LinkPacketType.HEARTBEAT:
+        assert (len(binary) == 0)
+        return HeartbeatPacket()
+    elif packet_type == LinkPacketType.LINKSTATE:
+        return decode_link_state_packet(binary)
+    elif packet_type == LinkPacketTpye.ROUTETRACE:
+        # TODO routetrace logic
+        raise Exception('unimplemented')
+    else:
+        raise Exception(f"unknown link packet type {repr(packet.packet_type)}")
+
+def decode_outer_packet(binary):
+    ''' Convert encoded bytes, _not including the link packet type byte_, into
+    an OuterPacket.
+    '''
     (
         priority,
         src_ip_address,
@@ -338,6 +503,42 @@ def decode_packet(binary):
         dst_ip_address=IPv4Address(dst_ip_address).exploded,
         dst_port=dst_port,
         inner=decode_inner_packet(inner),
+    )
+
+def decode_link_state_packet(binary):
+    ''' Convert encoded bytes, _not including the link packet type byte_, into
+    a LinkStatePacket.
+    '''
+    (
+        creator_ip_address,
+        creator_port,
+        seq_no,
+        expires,
+        num_neighbors,
+    ) = struct.unpack(LINK_STATE_HEADER_FORMAT, binary[:LINK_STATE_HEADER_SIZE])
+
+    assert (len(binary) == LINK_STATE_HEADER_SIZE + LINK_INFO_SIZE * num_neighbors)
+
+    neighbors = []
+    for i in range(num_neighbors):
+        offset = LINK_STATE_HEADER_SIZE + LINK_INFO_SIZE * i
+        (
+            link_ip_address,
+            link_port,
+            link_cost,
+        ) = struct.unpack(LINK_INFO_FORMAT, binary[offset:offset + LINK_INFO_SIZE])
+        neighbors.append(LinkInfo(
+            ip_address=IPv4Address(link_ip_address).exploded,
+            port=link_port,
+            cost=link_cost,
+        ))
+
+    return LinkStatePacket(
+        creator_ip_address=IPv4Address(creator_ip_address).exploded,
+        creator_port=creator_port,
+        seq_no=seq_no,
+        expires=expires,
+        neighbors=neighbors,
     )
 
 def decode_inner_packet(binary):
@@ -425,3 +626,42 @@ if __name__ == '__main__':
     decoded = decode_packet(encoded)
     print(f"decoded = {repr(decoded)}")
     assert (packet == decoded)
+
+    packet = LinkStatePacket(
+        creator_ip_address='84.24.0.122',
+        creator_port=5621,
+        seq_no=66638,
+        expires=8923423423,
+        neighbors=[
+            LinkInfo(
+                ip_address='7.7.7.7',
+                port=4,
+                cost=1.0,
+            ),
+            LinkInfo(
+                ip_address='8.8.1.3',
+                port=4,
+                cost=1.0,
+            ),
+            LinkInfo(
+                ip_address='7.7.4.7',
+                port=50,
+                cost=1.0,
+            ),
+        ]
+    )
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
+
+    packet = HeartbeatPacket()
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
+
