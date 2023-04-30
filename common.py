@@ -626,17 +626,17 @@ def decode_route_trace_packet(buf):
     # create RouteTracePacket object
     packet = RouteTracePacket(
         # type
-        header[0],
+        type=header[0],
         # TTL
-        header[1],
+        TTL=header[1],
         # src ip address
-        str(IPv4Address(header[2])),
+        src_ip_address=str(IPv4Address(header[2])),
         # src port
-        header[3],
+        src_port=header[3],
         # dst ip address
-        str(IPv4Address(header[4])),
+        dst_ip_address=str(IPv4Address(header[4])),
         # dst port
-        header[5],
+        dst_port=header[5],
     )
     
     return packet
@@ -730,3 +730,17 @@ if __name__ == '__main__':
     print(f"decoded = {repr(decoded)}")
     assert (packet == decoded)
 
+    packet = RouteTracePacket(
+        type=42,
+        TTL=23,
+        src_ip_address='1.2.3.4',
+        src_port=6,
+        dst_ip_address='9.2.4.1',
+        dst_port=978,
+    )
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
