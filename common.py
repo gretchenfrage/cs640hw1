@@ -204,7 +204,7 @@ class LinkPacketType(Enum):
     OUTER = ord('O')
     HEARTBEAT = ord('H')
     LINKSTATE = ord('L')
-    ROUTETRACE = ord('R')
+    ROUTETRACE = ord('T')
 
 link_packet_data_type = packet_data_type_factory(LinkPacketType, 'Packet')
 
@@ -254,6 +254,12 @@ LinkInfo = namedtuple('NeighborLinkInfo', [
 ''' Representation of a route trace packet, a type of link packet. '''
 RouteTracePacket = link_packet_data_type('RouteTracePacket', [
     # TODO routetrace logic
+    'type', # this is for the 'T' to identify is it already consider before?
+    'TTL',
+    'src_ip_address',
+    'src_port',
+    'dest_ip_address',
+    'dest_port',
 ])
 
 class PacketType(Enum):
@@ -476,7 +482,7 @@ def decode_packet(binary):
         return HeartbeatPacket()
     elif packet_type == LinkPacketType.LINKSTATE:
         return decode_link_state_packet(binary)
-    elif packet_type == LinkPacketTpye.ROUTETRACE:
+    elif packet_type == LinkPacketType.ROUTETRACE:
         # TODO routetrace logic
         raise Exception('unimplemented')
     else:
