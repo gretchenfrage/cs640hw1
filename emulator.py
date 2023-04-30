@@ -68,7 +68,22 @@ class Emulator:
         debug_print(f"forwarding table = {repr(forwarding_table_dic)}")
         return forwarding_table_dic
 
-    def routing(self,packet):
+    def handle_link_packet(self, packet):
+        if packet.packet_type == LinkPacketType.OUTER:
+            self.routing(packet)
+        elif packet.packet_type == LinkPacketType.HEARTBEAT:
+            # TODO link state routing logic
+            raise Exception('unimplemented')
+        elif packet.packet_type == LinkPacketType.LINKSTATE:
+            # TODO link state routing logic
+            raise Exception('unimplemented')
+        elif packet.packet_type == LinkPacketType.ROUTETRACE:
+            # TODO routetrace logic
+            raise Exception('unimplemented')
+        else:
+            raise Exception(f"unknown packet type for emulator: {repr(packet)}")
+
+    def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
         # Check if the destination is in the forwarding table
         if destination in self.forwarding_table:
@@ -180,7 +195,7 @@ def run_emulator(args):
         try:
             binary, remote_addr = socket.recvfrom(6000) 
             packet = decode_packet(binary)
-            emulator.routing(packet)
+            emulator.handle_link_packet(packet)
         except BlockingIOError:
             time.sleep(0.01)
 
