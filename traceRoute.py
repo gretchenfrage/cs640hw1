@@ -34,14 +34,14 @@ def main():
         #doubt : NEED TO CREATE A PACKET HERE
         # Create the routetrace packet
         packet = RouteTracePacket(type='T', TTL=ttl, src_ip_address=routeTrace_ip_address, src_port=routeTrace_port, 
-                          dest_ip_address=args.dest_host, dest_port=args.dest_port)
+                          dst_ip_address=args.dest_host, dst_port=args.dest_port)
         
         binary = encode_packet(packet)
         sock.sendto(binary,(args.src_host, args.src_port))
 
         #TODO: debugging
         if args.debug==1:
-            print(f'TTL={packet.TTL} src address : {routeTrace_ip_address}:{routeTrace_port}'
+            print(f'TTL={packet.TTL} src address (traceRoute) : {routeTrace_ip_address}:{routeTrace_port}'
                   f'dst={args.dest_host}:{args.dest_port}')
     
 
@@ -57,7 +57,7 @@ def main():
         #TODO: debugging
         if args.debug==1:
             print(f'TTL={packet.TTL} responded packet address : {response_ip_address}+:{response_ip_port}'
-                  f'dst={packet.dest_ip_address}:{packet.dest_port}')
+                  f'traceroute={packet.dest_ip_address}:{packet.dest_port}')
 
         if(response_ip_address == args.dest_host and response_ip_port == args.dest_port):
             break

@@ -258,8 +258,8 @@ RouteTracePacket = link_packet_data_type('RouteTracePacket', [
     'TTL',
     'src_ip_address',
     'src_port',
-    'dest_ip_address',
-    'dest_port',
+    'dst_ip_address',
+    'dst_port',
 ])
 
 class PacketType(Enum):
@@ -353,6 +353,22 @@ LINK_INFO_FORMAT = "!4sHf"
 
 LINK_INFO_SIZE = 10
 
+#TODO: need to add reference for ROUTETRACE
+'''
+Fields are :
+    - type - (8-bit unsigned )
+    - TTL - (64-bit unsigned int)
+    - src_ip_address (4 byte IPv4 address)
+    - src_port (16-bit unsigned int)
+    - dst_ip_address (4 byte IPv4 address)
+    - dst_port (16-bit unsigned int)
+'''
+
+
+ROUTETRACE_HEADER_SIZE = 21
+
+ROUTETRACE_HEADER_FORMAT = '!BQ4sH4sH'
+
 
 def encode_packet(packet):
     ''' Convert any link packet into bytes. '''
@@ -364,7 +380,8 @@ def encode_packet(packet):
         buf = encode_link_state_packet(packet)
     elif packet.packet_type == LinkPacketType.ROUTETRACE:
         # TODO routetrace logic
-        raise Exception('unimplemented')
+        buf = encode_route_trace_packet(packet)
+        # raise Exception('unimplemented')
     else:
         raise Exception(f"unknown link packet type {repr(packet.packet_type)}")
 
@@ -466,6 +483,24 @@ def encode_inner_packet(packet):
     buf.extend(payload)
     return buf
 
+def encode_route_trace_packet(packet):
+    buf = bytearray(ROUTETRACE_HEADER_SIZE)
+    header = (
+        packet.type,
+        packet.TTL,
+        # src ip address
+        IPv4Address(packet.src_ip_address).packed,
+        # src port
+        packet.src_port,
+        # dst ip address
+        IPv4Address(packet.dst_ip_address).packed,
+        # dst port
+        packet.dst_port,
+    )
+    struct.pack_into(ROUTETRACE_HEADER_FORMAT, buf, 0, *header)
+    # buf.extend(inner)
+    return buf
+
 def decode_packet(binary):
     ''' Convert encoded bytes into some type of link packet.
 
@@ -483,8 +518,9 @@ def decode_packet(binary):
     elif packet_type == LinkPacketType.LINKSTATE:
         return decode_link_state_packet(binary)
     elif packet_type == LinkPacketType.ROUTETRACE:
-        # TODO routetrace logic
-        raise Exception('unimplemented')
+        # # TODO routetrace logic
+        # raise Exception('unimplemented')
+        return decode_route_trace_packet(binary)
     else:
         raise Exception(f"unknown link packet type {repr(packet.packet_type)}")
 
@@ -581,6 +617,29 @@ def decode_inner_packet(binary):
     else:
         raise Exception(f"unknown packet type {repr(packet_type)}")
 
+def decode_route_trace_packet(buf):
+    ''' Convert a bytes to a RouteTracePacket object. '''
+
+    # unpack header
+    header = struct.unpack_from(ROUTETRACE_HEADER_FORMAT, buf, 0)
+    
+    # create RouteTracePacket object
+    packet = RouteTracePacket(
+        # type
+        header[0],
+        # TTL
+        header[1],
+        # src ip address
+        str(IPv4Address(header[2])),
+        # src port
+        header[3],
+        # dst ip address
+        str(IPv4Address(header[4])),
+        # dst port
+        header[5],
+    )
+    
+    return packet
 
 if __name__ == '__main__':
     # random demo of encoding and decoding you can run by running common.py
