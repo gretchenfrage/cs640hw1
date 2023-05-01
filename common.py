@@ -54,6 +54,11 @@ def resolve_ip(resolvable):
     try:
         # case that it is already an IP address
         IPv4Address(resolvable)
+
+        # funnie hack
+        if resolvable == '127.0.0.1':
+            return get_host_ip()
+
         return resolvable
     except AddressValueError:
         # otherwise assume is a host name

@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from collections import namedtuple, defaultdict
 import random
+from heapq import heappop, heappush
 
 from common import *
 import queue
@@ -72,6 +73,7 @@ class Emulator:
         return log_file_name
 
     def read_direct_links(self, my_hostname, my_port):
+        meeeee = (resolve_ip(my_hostname), my_port)
         with open('topology.txt', 'r') as f:
             for line in f.readlines():
                 parts = line.split(' ')
@@ -79,12 +81,14 @@ class Emulator:
                 parts = [(part[0], int(part[1])) for part in parts]
                 parts = [(resolve_ip(hostname), port) for hostname, port in parts]
 
-                if parts[0] == (resolve_ip(my_hostname), my_port):
+                if parts[0] == meeeee:
                     return {
                         part: DirectLink()
                         for part in parts[1:]
                     }
-        raise Exception("couldn't find my direct links in topology.txt")
+        raise Exception(
+            f"couldn't find my direct links in topology.txt {meeeee=}"
+        )
 
 
     ##we are creating a forwarding table for this emulator from the given list.
@@ -107,6 +111,152 @@ class Emulator:
     #                forwarding_table_dic[destination] = (next_hop, delay, loss_prob)
     #    debug_print(f"forwarding table = {repr(forwarding_table_dic)}")
     #    return forwarding_table_dic
+
+    def compute_forwarding_table(self):
+        ''' Compute forwarding table from self.nodes_link_state. '''
+
+
+        # self.nodes_link_state is a dictionary from (ip address, port) tuples
+        # to NodeLinkState objects. NodeLinkState.neighbors is a list of
+        # LinkInfo objects. LinkInfo contains the fields ip_address, port, and
+        # cost (a float).
+        #
+        # self.emul_hostname and self.emul_port contain this node's own ip
+        # address and port.
+        #
+        # this function must use Dijkstra's algorithm to populate
+        # self.forwarding_table, a mapping from "ip address:port" strings to
+        # "ip address:port" strings, wherein the key is the target and the val
+        # is the optimal next hop.
+
+        self.forwarding_table = {}
+
+        def dijkstra(src):
+            visited = set()
+            distance = defaultdict(lambda: float('inf'))
+            prev_hop = dict()
+
+            distance[src] = 0
+            priority_queue = [(0, src, None)]
+
+            while priority_queue:
+                dist, node, prev = heappop(priority_queue)
+
+                if node in visited:
+                    continue
+
+                visited.add(node)
+                prev_hop[node] = prev
+
+                for neighbor in self.nodes_link_state[node].neighbors:
+                    neighbor_key = (neighbor.ip_address, neighbor.port)
+                    if neighbor_key not in visited:
+                        new_dist = dist + neighbor.cost
+                        if new_dist < distance[neighbor_key]:
+                            distance[neighbor_key] = new_dist
+                            heappush(priority_queue, (new_dist, neighbor_key, node))
+
+            return prev_hop
+
+        source = (get_host_ip(), self.emul_port)
+        prev_hop = dijkstra(source)
+
+        # Build a reverse mapping for prev_hop
+        reverse_prev_hop = defaultdict(set)
+        for dest, next_hop in prev_hop.items():
+            if next_hop:
+                reverse_prev_hop[next_hop].add(dest)
+
+        # Populate the forwarding table with immediate neighbors
+        for neighbor in self.nodes_link_state[source].neighbors:
+            neighbor_key = (neighbor.ip_address, neighbor.port)
+            self.forwarding_table[f"{neighbor_key[0]}:{neighbor_key[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+
+        # Populate the forwarding table with other destinations
+        for neighbor in self.nodes_link_state[source].neighbors:
+            neighbor_key = (neighbor.ip_address, neighbor.port)
+            destinations = reverse_prev_hop[neighbor_key]
+            for dest in destinations:
+                self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+
+#        def dijkstra(src):
+#            visited = set()
+#            distance = defaultdict(lambda: float('inf'))
+#            prev_hop = dict()
+#
+#            distance[src] = 0
+#            priority_queue = [(0, src, None)]
+#
+#            while priority_queue:
+#                dist, node, prev = heappop(priority_queue)
+#
+#                if node in visited:
+#                    continue
+#
+#                visited.add(node)
+#                prev_hop[node] = prev
+#
+#                for neighbor in self.nodes_link_state[node].neighbors:
+#                    neighbor_key = (neighbor.ip_address, neighbor.port)
+#                    if neighbor_key not in visited:
+#                        new_dist = dist + neighbor.cost
+#                        if new_dist < distance[neighbor_key]:
+#                            distance[neighbor_key] = new_dist
+#                            heappush(priority_queue, (new_dist, neighbor_key, node))
+#
+#            return prev_hop
+#
+#        source = (get_host_ip(), self.emul_port)
+#        prev_hop = dijkstra(source)
+#
+#        # Build a reverse mapping for prev_hop
+#        reverse_prev_hop = defaultdict(set)
+#        for dest, next_hop in prev_hop.items():
+#            if next_hop:
+#                reverse_prev_hop[next_hop].add(dest)
+#
+#        # Populate the forwarding table
+#        for neighbor in self.nodes_link_state[source].neighbors:
+#            neighbor_key = (neighbor.ip_address, neighbor.port)
+#            destinations = reverse_prev_hop[neighbor_key]
+#            for dest in destinations:
+#                self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+
+#        def dijkstra(src):
+#            visited = set()
+#            distance = defaultdict(lambda: float('inf'))
+#            prev_hop = dict()
+#
+#            distance[src] = 0
+#            priority_queue = [(0, src, None)]
+#
+#            while priority_queue:
+#                dist, node, prev = heappop(priority_queue)
+#                debug_print(f"heappopped {dist=} {node=} {prev=}")
+#
+#                if node in visited:
+#                    continue
+#
+#                visited.add(node)
+#                prev_hop[node] = prev
+#
+#                for neighbor in self.nodes_link_state[node].neighbors:
+#                    neighbor_key = (neighbor.ip_address, neighbor.port)
+#                    if neighbor_key not in visited:
+#                        new_dist = dist + neighbor.cost
+#                        if new_dist < distance[neighbor_key]:
+#                            distance[neighbor_key] = new_dist
+#                            heappush(priority_queue, (new_dist, neighbor_key, node))
+#
+#            return prev_hop
+#
+#        source = (get_host_ip(), self.emul_port)
+#        prev_hop = dijkstra(source)
+#
+#        for dest, next_hop in prev_hop.items():
+#            self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{next_hop[0]}:{next_hop[1]}" if next_hop else None
+
+
 
     def handle_link_packet(self, packet, received_from, binary, socket):
         if packet.packet_type == LinkPacketType.OUTER:
@@ -139,7 +289,7 @@ class Emulator:
         # reliable flood it
         direct_link_match_counter = 0
         for direct_link in self.direct_links.keys():
-            if direct_link == received_from:
+            if direct_link == (resolve_ip(received_from[0]), received_from[1]):
                 #debug_print(f"not flooding to {repr(direct_link)} because that's who I received it from")
                 direct_link_match_counter += 1
             #debug_print(f"flooding-relaying to {repr(direct_link)}: {repr(packet)}")
@@ -153,13 +303,24 @@ class Emulator:
     def on_nodes_link_state_update(self):
         #debug_print(f"{self.nodes_link_state=}")
 
+        debug_print("")
+
         debug_print("printing connectivity graph")
         for key, val in self.nodes_link_state.items():
             key_str = f"{key[0]}:{str(key[1])}"
-            debug_print(f"{key_str} has the following links:")
+            debug_print(f"- {key_str} has the following links:")
             for neighbor in val.neighbors:
                 neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
-                debug_print(f"- {neighbor_str}")
+                debug_print(f"- - {neighbor_str}")
+
+        self.compute_forwarding_table()
+
+        debug_print("printing forwarding table")
+
+        for key, val in self.forwarding_table.items():
+            debug_print(f"- ({key}, {val})")
+
+        debug_print("")
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
@@ -306,6 +467,7 @@ def run_emulator(args):
 
     #binding the emulator to the port.
     while(True):
+        emulator.send_emulator(socket)
         try:
             binary, remote_addr = socket.recvfrom(6000) 
             packet = decode_packet(binary)
@@ -313,7 +475,6 @@ def run_emulator(args):
         except BlockingIOError:
             time.sleep(0.01)
 
-        emulator.send_emulator(socket)
 
     
 
