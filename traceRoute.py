@@ -33,7 +33,7 @@ def main():
 
         #doubt : NEED TO CREATE A PACKET HERE
         # Create the routetrace packet
-        packet = RouteTracePacket(type='T', TTL=ttl, src_ip_address=routeTrace_ip_address, src_port=routeTrace_port, 
+        packet = RouteTracePacket( TTL=ttl, src_ip_address=routeTrace_ip_address, src_port=routeTrace_port, 
                           dst_ip_address=args.dest_host, dst_port=args.dest_port)
         
         binary = encode_packet(packet)

@@ -253,8 +253,6 @@ LinkInfo = namedtuple('NeighborLinkInfo', [
 
 ''' Representation of a route trace packet, a type of link packet. '''
 RouteTracePacket = link_packet_data_type('RouteTracePacket', [
-    # TODO routetrace logic
-    'type', # this is for the 'T' to identify is it already consider before?
     'TTL',
     'src_ip_address',
     'src_port',
@@ -365,9 +363,9 @@ Fields are :
 '''
 
 
-ROUTETRACE_HEADER_SIZE = 21
+ROUTETRACE_HEADER_SIZE = 20
 
-ROUTETRACE_HEADER_FORMAT = '!BQ4sH4sH'
+ROUTETRACE_HEADER_FORMAT = '!Q4sH4sH'
 
 
 def encode_packet(packet):
@@ -486,7 +484,6 @@ def encode_inner_packet(packet):
 def encode_route_trace_packet(packet):
     buf = bytearray(ROUTETRACE_HEADER_SIZE)
     header = (
-        packet.type,
         packet.TTL,
         # src ip address
         IPv4Address(packet.src_ip_address).packed,
@@ -625,18 +622,16 @@ def decode_route_trace_packet(buf):
     
     # create RouteTracePacket object
     packet = RouteTracePacket(
-        # type
-        type=header[0],
         # TTL
-        TTL=header[1],
+        TTL=header[0],
         # src ip address
-        src_ip_address=str(IPv4Address(header[2])),
+        src_ip_address=str(IPv4Address(header[1])),
         # src port
-        src_port=header[3],
+        src_port=header[2],
         # dst ip address
-        dst_ip_address=str(IPv4Address(header[4])),
+        dst_ip_address=str(IPv4Address(header[3])),
         # dst port
-        dst_port=header[5],
+        dst_port=header[4],
     )
     
     return packet
@@ -731,7 +726,6 @@ if __name__ == '__main__':
     assert (packet == decoded)
 
     packet = RouteTracePacket(
-        type=42,
         TTL=23,
         src_ip_address='1.2.3.4',
         src_port=6,
