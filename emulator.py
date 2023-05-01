@@ -65,6 +65,7 @@ class Emulator:
         debug_print(f"{self.direct_links=}")
 
 
+
     def createLogFile(self,log_file_name):
         if not os.path.exists(log_file_name):
             open(log_file_name, "w").close()
@@ -145,7 +146,20 @@ class Emulator:
             socket.sendto(binary, direct_link)
 
         if direct_link_match_counter != 1:
-            debug_pritn(f"warning: {direct_link_match_counter=} (should be 1, right?)")
+            debug_print(f"warning: {direct_link_match_counter=} (should be 1, right?)")
+
+        self.on_nodes_link_state_update()
+
+    def on_nodes_link_state_update(self):
+        #debug_print(f"{self.nodes_link_state=}")
+
+        debug_print("printing connectivity graph")
+        for key, val in self.nodes_link_state.items():
+            key_str = f"{key[0]}:{str(key[1])}"
+            debug_print(f"{key_str} has the following links:")
+            for neighbor in val.neighbors:
+                neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
+                debug_print(f"- {neighbor_str}")
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
@@ -242,6 +256,12 @@ class Emulator:
 
             for direct_link in self.direct_links.keys():
                 socket.sendto(ls_binary, direct_link)
+
+            my_node_link_state = self.nodes_link_state[(resolve_ip(self.emul_hostname), self.emul_port)]
+            my_node_link_state.seq_no = self.current_my_seq_no
+            my_node_link_state.neighbors = list(ls_packet.neighbors)
+
+            self.on_nodes_link_state_update()
 
         # other stuff
 
