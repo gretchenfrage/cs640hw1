@@ -429,7 +429,6 @@ def encode_link_state_packet(packet):
         # number of neighbors
         len(packet.neighbors),
     )
-    print(f"{repr(header)=}")
     struct.pack_into(LINK_STATE_HEADER_FORMAT, buf, 0, *header)
 
     # pack link info elements

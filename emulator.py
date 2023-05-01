@@ -58,6 +58,10 @@ class Emulator:
         # mapping from (ip address string, port int) to DirectLink
         self.direct_links = self.read_direct_links(hostname, port)
 
+        self.interval_of_transmission = 1
+        self.last_transmitted = None
+        self.current_my_seq_no = 0
+
         debug_print(f"{self.direct_links=}")
 
 
@@ -103,33 +107,45 @@ class Emulator:
     #    debug_print(f"forwarding table = {repr(forwarding_table_dic)}")
     #    return forwarding_table_dic
 
-    def handle_link_packet(self, packet):
+    def handle_link_packet(self, packet, received_from, binary, socket):
         if packet.packet_type == LinkPacketType.OUTER:
             self.routing(packet)
         elif packet.packet_type == LinkPacketType.HEARTBEAT:
             # TODO link state routing logic
             raise Exception('unimplemented')
         elif packet.packet_type == LinkPacketType.LINKSTATE:
-            self.handle_link_state_packet(packet)
+            self.handle_link_state_packet(packet, received_from, binary, socket)
         elif packet.packet_type == LinkPacketType.ROUTETRACE:
             # TODO routetrace logic
             raise Exception('unimplemented')
         else:
             raise Exception(f"unknown packet type for emulator: {repr(packet)}")
 
-    def handle_link_state_packet(self, packet):
-        # lookup (populate if necessary)
-        node_link_state = self.nodes_link_state[(packet.src_ip_address, packet.src_port)]
+    def handle_link_state_packet(self, packet, received_from, binary, socket):
+        # lookup entry (create if necessary)
+        node_link_state = self.nodes_link_state[(packet.creator_ip_address, packet.creator_port)]
         
-        # short-circuit if out of date
+        # short-circuit if new packet of date
         if packet.seq_no <= node_link_state.seq_no:
             return
 
-        # update internal value
+        # update internal entry
         node_link_state.seq_no = packet.seq_no
         node_link_state.neighbors = list(packet.neighbors)
 
+        # TODO recalculate routing table
 
+        # reliable flood it
+        direct_link_match_counter = 0
+        for direct_link in self.direct_links.keys():
+            if direct_link == received_from:
+                #debug_print(f"not flooding to {repr(direct_link)} because that's who I received it from")
+                direct_link_match_counter += 1
+            #debug_print(f"flooding-relaying to {repr(direct_link)}: {repr(packet)}")
+            socket.sendto(binary, direct_link)
+
+        if direct_link_match_counter != 1:
+            debug_pritn(f"warning: {direct_link_match_counter=} (should be 1, right?)")
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
@@ -198,6 +214,37 @@ class Emulator:
             )
 
     def send_emulator(self, socket):
+        # this gets called constantly
+        # so naive busy-polling logic can simply go in here :)
+        
+        # periodic transmission of link state packet
+        now = time.time()
+        if self.last_transmitted is None or now - self.last_transmitted >= self.interval_of_transmission:
+            self.last_transmitted = now
+
+            self.current_my_seq_no += 1
+
+            ls_packet = LinkStatePacket(
+                creator_ip_address=resolve_ip(self.emul_hostname),
+                creator_port=self.emul_port,
+                seq_no=self.current_my_seq_no,
+                expires=now + 10, # TODO idk
+                neighbors=[
+                    LinkInfo(
+                        ip_address=direct_link[0],
+                        port=direct_link[1],
+                        cost=1.0,
+                    )
+                    for direct_link in self.direct_links.keys()
+                ]
+            )
+            ls_binary = encode_packet(ls_packet)
+
+            for direct_link in self.direct_links.keys():
+                socket.sendto(ls_binary, direct_link)
+
+        # other stuff
+
         if self.delayed_packet is None:
             self.dequeue_packet(socket)
 
@@ -242,7 +289,7 @@ def run_emulator(args):
         try:
             binary, remote_addr = socket.recvfrom(6000) 
             packet = decode_packet(binary)
-            emulator.handle_link_packet(packet)
+            emulator.handle_link_packet(packet, remote_addr, binary, socket)
         except BlockingIOError:
             time.sleep(0.01)
 
