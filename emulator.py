@@ -22,7 +22,6 @@ def parse_cli_args():
     parser = ArgumentParser(prog='emulator')
     parser.add_argument('-p', dest='bind_to_port', metavar='port', required=True, type=int)
     parser.add_argument('-q', dest='queue_size', metavar='queue_size', required=True, type=int)
-    parser.add_argument('-f', dest='forwarding_table', metavar='filename', required=True, type=str)
     parser.add_argument('-l', dest='log_file_name', metavar='log', required=True, type=str)
     return parser.parse_args()
 
@@ -43,7 +42,7 @@ class DirectLink:
         pass
 
 class Emulator:
-    def __init__(self, hostname, port, queue_size, forwarding_table_file,log_file_name):
+    def __init__(self, hostname, port, queue_size, log_file_name):
         self.emul_hostname = hostname
         self.emul_port = port
         self.queue_size = queue_size
@@ -234,7 +233,6 @@ def run_emulator(args):
         # as per https://piazza.com/class/ldj54bkd4mi1g/post/153
         hostname=gethostname(),
         port=args.bind_to_port,
-        forwarding_table_file=args.forwarding_table,
         queue_size=args.queue_size,
         log_file_name=args.log_file_name,
     )
