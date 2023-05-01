@@ -48,7 +48,7 @@ class Emulator:
         self.emul_port = port
         self.queue_size = queue_size
         self.log_file = self.createLogFile(log_file_name)
-        self.forwarding_table = self.createForwardingTable(forwarding_table_file)
+        #self.forwarding_table = self.createForwardingTable(forwarding_table_file)
         self.queues = [queue.Queue(),queue.Queue(),queue.Queue()]
         self.delayed_packet = None
 
@@ -57,7 +57,9 @@ class Emulator:
         self.nodes_link_state = defaultdict(NodeLinkState)
 
         # mapping from (ip address string, port int) to DirectLink
-        self.direct_links = {}
+        self.direct_links = self.read_direct_links(hostname, port)
+
+        debug_print(f"{self.direct_links=}")
 
 
     def createLogFile(self,log_file_name):
@@ -65,27 +67,42 @@ class Emulator:
             open(log_file_name, "w").close()
         return log_file_name
 
+    def read_direct_links(self, my_hostname, my_port):
+        with open('topology.txt', 'r') as f:
+            for line in f.readlines():
+                parts = line.split(' ')
+                parts = [part.split(',') for part in parts]
+                parts = [(part[0], int(part[1])) for part in parts]
+                parts = [(resolve_ip(hostname), port) for hostname, port in parts]
 
-    #we are creating a forwarding table for this emulator from the given list.
-    def createForwardingTable(self,forwarding_table):
-        forwarding_table_dic = {}
-        with open(forwarding_table, 'r') as f:
-            for line in f:
-                tokens = line.strip().split()
-                debug_print(f"tokens = {repr(tokens)}")
-                debug_print(f"emul_hostname = {self.emul_hostname}")
-                debug_print(f"emul_port = {self.emul_port}")
-                if (
-                    resolve_ip(tokens[0]) == resolve_ip(self.emul_hostname)
-                    and int(tokens[1]) == self.emul_port
-                ):    
-                    destination = resolve_ip(tokens[2]) + ":" + str(tokens[3])
-                    next_hop = (tokens[4], int(tokens[5]))
-                    delay = int(tokens[6])
-                    loss_prob = float(tokens[7]) / 100
-                    forwarding_table_dic[destination] = (next_hop, delay, loss_prob)
-        debug_print(f"forwarding table = {repr(forwarding_table_dic)}")
-        return forwarding_table_dic
+                if parts[0] == (resolve_ip(my_hostname), my_port):
+                    return {
+                        part: DirectLink()
+                        for part in parts[1:]
+                    }
+        raise Exception("couldn't find my direct links in topology.txt")
+
+
+    ##we are creating a forwarding table for this emulator from the given list.
+    #def createForwardingTable(self,forwarding_table):
+    #    forwarding_table_dic = {}
+    #    with open(forwarding_table, 'r') as f:
+    #        for line in f:
+    #            tokens = line.strip().split()
+    #            debug_print(f"tokens = {repr(tokens)}")
+    #            debug_print(f"emul_hostname = {self.emul_hostname}")
+    #            debug_print(f"emul_port = {self.emul_port}")
+    #            if (
+    #                resolve_ip(tokens[0]) == resolve_ip(self.emul_hostname)
+    #                and int(tokens[1]) == self.emul_port
+    #            ):    
+    #                destination = resolve_ip(tokens[2]) + ":" + str(tokens[3])
+    #                next_hop = (tokens[4], int(tokens[5]))
+    #                delay = int(tokens[6])
+    #                loss_prob = float(tokens[7]) / 100
+    #                forwarding_table_dic[destination] = (next_hop, delay, loss_prob)
+    #    debug_print(f"forwarding table = {repr(forwarding_table_dic)}")
+    #    return forwarding_table_dic
 
     def handle_link_packet(self, packet):
         if packet.packet_type == LinkPacketType.OUTER:
