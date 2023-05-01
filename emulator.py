@@ -79,9 +79,28 @@ class Emulator:
             raise Exception('unimplemented')
         elif packet.packet_type == LinkPacketType.ROUTETRACE:
             # TODO routetrace logic
-            raise Exception('unimplemented')
+            self.routeTraceFrwding(packet)
+            # raise Exception('unimplemented')
         else:
             raise Exception(f"unknown packet type for emulator: {repr(packet)}")
+
+    def routeTraceFrwding(self, packet):
+        if packet.TTL == 0:
+            received_ip_address = packet.src_ip_addres
+            received_port = packet.src_port
+            # Create a new routetrace packet with the emulator's IP and port as the source address
+            new_packet = RouteTracePacket( TTL=packet.TTL, src_ip_address=self.emul_hostname, src_port=self.emul_port, 
+                          dst_ip_address=packet.dst_ip_address, dst_port=packet.dst_port)
+            self.send_packet(new_packet,(received_ip_address,received_port))
+        else:
+            # Decrement the TTL value in the packet and forward it to the next hop based on the routing table
+            packet.TTL -= 1
+
+            #TODO: need to get the next shortest hop 
+            # next_hop = self.(packet.dest_ip)
+            next_hop = (a,b)
+            self.send_packet(packet, next_hop)
+
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)
