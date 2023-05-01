@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from socket import socket as create_socket, gethostname, AF_INET, SOCK_DGRAM
 import time
 from datetime import datetime
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import random
 
 from common import *
@@ -31,6 +31,17 @@ DelayedPacket = namedtuple('DelayedPacket', [
     'delayed_until',
 ])
 
+class NodeLinkState:
+    def __init__(self):
+        # highest ever known seq no
+        self.seq_no = -1
+        self.neighbors = []
+        # TODO: expiration something
+
+class DirectLink:
+    def __init__(self):
+        pass
+
 class Emulator:
     def __init__(self, hostname, port, queue_size, forwarding_table_file,log_file_name):
         self.emul_hostname = hostname
@@ -40,6 +51,14 @@ class Emulator:
         self.forwarding_table = self.createForwardingTable(forwarding_table_file)
         self.queues = [queue.Queue(),queue.Queue(),queue.Queue()]
         self.delayed_packet = None
+
+        # mapping from (ip address string, port int) to NodeLinkState
+        # defaultdict makes queries for absent keys auto-populate that entry with NodeLinkState()
+        self.nodes_link_state = defaultdict(NodeLinkState)
+
+        # mapping from (ip address string, port int) to DirectLink
+        self.direct_links = {}
+
 
     def createLogFile(self,log_file_name):
         if not os.path.exists(log_file_name):
@@ -75,13 +94,26 @@ class Emulator:
             # TODO link state routing logic
             raise Exception('unimplemented')
         elif packet.packet_type == LinkPacketType.LINKSTATE:
-            # TODO link state routing logic
-            raise Exception('unimplemented')
+            self.handle_link_state_packet(packet)
         elif packet.packet_type == LinkPacketType.ROUTETRACE:
             # TODO routetrace logic
             raise Exception('unimplemented')
         else:
             raise Exception(f"unknown packet type for emulator: {repr(packet)}")
+
+    def handle_link_state_packet(self, packet):
+        # lookup (populate if necessary)
+        node_link_state = self.nodes_link_state[(packet.src_ip_address, packet.src_port)]
+        
+        # short-circuit if out of date
+        if packet.seq_no <= node_link_state.seq_no:
+            return
+
+        # update internal value
+        node_link_state.seq_no = packet.seq_no
+        node_link_state.neighbors = list(packet.neighbors)
+
+
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)

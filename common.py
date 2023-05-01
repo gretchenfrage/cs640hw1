@@ -32,7 +32,7 @@ def should_drop_debug_thing(packet):
 
 # ==== additional debug stuff ====
 
-DEBUG_PRINT = False
+DEBUG_PRINT = True
 
 def debug_print(s):
     if DEBUG_PRINT:

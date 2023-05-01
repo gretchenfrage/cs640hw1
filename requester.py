@@ -172,7 +172,7 @@ def request(args):
                 window_size=args.window_size,
             ))
             binary = encode_packet(packet)
-            debug_print(f"sending {repr(packet)}")
+            debug_print(f"sending {repr(packet)} to {repr(net_send_to)}")
             socket.sendto(binary, net_send_to)
 
             # receive response
