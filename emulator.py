@@ -131,6 +131,17 @@ class Emulator:
 
         self.forwarding_table = {}
 
+        conns = defaultdict(set)
+
+        for a, node_link_state in self.nodes_link_state.items():
+            for neighbor in node_link_state.neighbors:
+                b = (neighbor.ip_address, neighbor.port)
+
+                conns[a].add((b, neighbor.cost))
+                conns[b].add((a, neighbor.cost))
+
+        debug_print(f"{conns=}")
+
         def dijkstra(src):
             visited = set()
             distance = defaultdict(lambda: float('inf'))
@@ -148,10 +159,11 @@ class Emulator:
                 visited.add(node)
                 prev_hop[node] = prev
 
-                for neighbor in self.nodes_link_state[node].neighbors:
-                    neighbor_key = (neighbor.ip_address, neighbor.port)
+                #for neighbor in self.nodes_link_state[node].neighbors:
+                #    neighbor_key = (neighbor.ip_address, neighbor.port)
+                for neighbor_key, neighbor_cost in conns[node]:
                     if neighbor_key not in visited:
-                        new_dist = dist + neighbor.cost
+                        new_dist = dist + neighbor_cost
                         if new_dist < distance[neighbor_key]:
                             distance[neighbor_key] = new_dist
                             heappush(priority_queue, (new_dist, neighbor_key, node))
@@ -168,16 +180,30 @@ class Emulator:
                 reverse_prev_hop[next_hop].add(dest)
 
         # Populate the forwarding table with immediate neighbors
-        for neighbor in self.nodes_link_state[source].neighbors:
-            neighbor_key = (neighbor.ip_address, neighbor.port)
+        #for neighbor in self.nodes_link_state[source].neighbors:
+        #    neighbor_key = (neighbor.ip_address, neighbor.port)
+        for neighbor_key, _ in conns[source]:
             self.forwarding_table[f"{neighbor_key[0]}:{neighbor_key[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
 
         # Populate the forwarding table with other destinations
-        for neighbor in self.nodes_link_state[source].neighbors:
-            neighbor_key = (neighbor.ip_address, neighbor.port)
+        #for neighbor in self.nodes_link_state[source].neighbors:
+        #    neighbor_key = (neighbor.ip_address, neighbor.port)
+        for neighbor_key, _ in conns[source]:
             destinations = reverse_prev_hop[neighbor_key]
             for dest in destinations:
                 self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+
+        self.forwarding_table = {
+            key: (
+                # next hop
+                next_hop,
+                # delay,
+                0.0,
+                # loss probability
+                0.0,
+            )
+            for key, next_hop in self.forwarding_table.items()
+        }
 
 #        def dijkstra(src):
 #            visited = set()
@@ -301,26 +327,29 @@ class Emulator:
         self.on_nodes_link_state_update()
 
     def on_nodes_link_state_update(self):
-        #debug_print(f"{self.nodes_link_state=}")
 
-        debug_print("")
+        if True or self.nodes_link_state != getattr(self, 'last_printed_nodes_link_state', None):
+            debug_print("")
+            debug_print("printing connectivity graph")
+            for key, val in self.nodes_link_state.items():
+                key_str = f"{key[0]}:{str(key[1])}"
+                debug_print(f"- {key_str} has the following links:")
+                for neighbor in val.neighbors:
+                    neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
+                    debug_print(f"- - {neighbor_str}")
+            debug_print("")
 
-        debug_print("printing connectivity graph")
-        for key, val in self.nodes_link_state.items():
-            key_str = f"{key[0]}:{str(key[1])}"
-            debug_print(f"- {key_str} has the following links:")
-            for neighbor in val.neighbors:
-                neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
-                debug_print(f"- - {neighbor_str}")
-
+            self.last_printed_nodes_link_state = self.nodes_link_state
+        
         self.compute_forwarding_table()
 
-        debug_print("printing forwarding table")
+        if True or self.forwarding_table != getattr(self, 'last_printed_forwarding_table', None):
+            debug_print("printing forwarding table")
+            for key, (val, _, _) in self.forwarding_table.items():
+                debug_print(f"- ({key}, {val})")
+            debug_print("")
 
-        for key, val in self.forwarding_table.items():
-            debug_print(f"- ({key}, {val})")
-
-        debug_print("")
+            self.last_printed_forwarding_table = self.forwarding_table
 
     def routing(self, packet):
         destination = packet.dst_ip_address+":"+str(packet.dst_port)

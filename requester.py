@@ -196,6 +196,10 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
         binary, remote_addr = socket.recvfrom(6000)
         packet = decode_packet(binary)
         
+        if packet.packet_type != LinkPacketType.OUTER:
+            #print(f"requester ignoring router packet: {repr(packet)}")
+            continue
+
         # "Verify that the destination IP address in the packet is indeed its
         # own IP address"
         if not (
