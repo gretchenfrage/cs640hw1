@@ -140,12 +140,13 @@ class Emulator:
                 conns[a].add((b, neighbor.cost))
                 conns[b].add((a, neighbor.cost))
 
-        debug_print(f"{conns=}")
+        #debug_print(f"{conns=}")
+        source = (get_host_ip(), self.emul_port)
 
         def dijkstra(src):
             visited = set()
             distance = defaultdict(lambda: float('inf'))
-            prev_hop = dict()
+            #prev_hop = dict()
 
             distance[src] = 0
             priority_queue = [(0, src, None)]
@@ -157,10 +158,15 @@ class Emulator:
                     continue
 
                 visited.add(node)
-                prev_hop[node] = prev
 
-                #for neighbor in self.nodes_link_state[node].neighbors:
-                #    neighbor_key = (neighbor.ip_address, neighbor.port)
+                if prev is None:
+                    pass
+                elif prev == source:
+                    self.forwarding_table[f"{node[0]}:{node[1]}"] = f"{node[0]}:{node[1]}"
+                else:
+                    self.forwarding_table[f"{node[0]}:{node[1]}"] = self.forwarding_table[f"{prev[0]}:{prev[1]}"]
+                #prev_hop[node] = prev
+
                 for neighbor_key, neighbor_cost in conns[node]:
                     if neighbor_key not in visited:
                         new_dist = dist + neighbor_cost
@@ -168,31 +174,45 @@ class Emulator:
                             distance[neighbor_key] = new_dist
                             heappush(priority_queue, (new_dist, neighbor_key, node))
 
-            return prev_hop
+            #return prev_hop
 
-        source = (get_host_ip(), self.emul_port)
-        prev_hop = dijkstra(source)
+        #rev_hop = dijkstra(source)
+        dijkstra(source)
 
-        # Build a reverse mapping for prev_hop
-        reverse_prev_hop = defaultdict(set)
-        for dest, next_hop in prev_hop.items():
-            if next_hop:
-                reverse_prev_hop[next_hop].add(dest)
+#        debug_print(f"{prev_hop=}")
+#
+#        # Build a reverse mapping for prev_hop
+#        reverse_prev_hop = defaultdict(set)
+#        for dest, next_hop in prev_hop.items():
+#            if next_hop:
+#                reverse_prev_hop[next_hop].add(dest)
+#
+#        debug_print(f"{reverse_prev_hop=}")
+#
+#        # forward search part
+#        queue = [(0, source)]
+#        visited = set()
+#        while queue:
+#            cost, current = heappop(queue)
+#            if current in visited:
+#                continue
+#            visited.add(current)
+#            for 
 
-        # Populate the forwarding table with immediate neighbors
-        #for neighbor in self.nodes_link_state[source].neighbors:
-        #    neighbor_key = (neighbor.ip_address, neighbor.port)
-        for neighbor_key, _ in conns[source]:
-            self.forwarding_table[f"{neighbor_key[0]}:{neighbor_key[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
-
-        # Populate the forwarding table with other destinations
-        #for neighbor in self.nodes_link_state[source].neighbors:
-        #    neighbor_key = (neighbor.ip_address, neighbor.port)
-        for neighbor_key, _ in conns[source]:
-            destinations = reverse_prev_hop[neighbor_key]
-            for dest in destinations:
-                self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
-
+#        # Populate the forwarding table with immediate neighbors
+#        #for neighbor in self.nodes_link_state[source].neighbors:
+#        #    neighbor_key = (neighbor.ip_address, neighbor.port)
+#        for neighbor_key, _ in conns[source]:
+#            self.forwarding_table[f"{neighbor_key[0]}:{neighbor_key[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+#
+#        # Populate the forwarding table with other destinations
+#        #for neighbor in self.nodes_link_state[source].neighbors:
+#        #    neighbor_key = (neighbor.ip_address, neighbor.port)
+#        for neighbor_key, _ in conns[source]:
+#            destinations = reverse_prev_hop[neighbor_key]
+#            for dest in destinations:
+#                self.forwarding_table[f"{dest[0]}:{dest[1]}"] = f"{neighbor_key[0]}:{neighbor_key[1]}"
+#
         self.forwarding_table = {
             key: (
                 # next hop
@@ -328,7 +348,7 @@ class Emulator:
 
     def on_nodes_link_state_update(self):
 
-        if True or self.nodes_link_state != getattr(self, 'last_printed_nodes_link_state', None):
+        if self.nodes_link_state != getattr(self, 'last_printed_nodes_link_state', None):
             debug_print("")
             debug_print("printing connectivity graph")
             for key, val in self.nodes_link_state.items():
@@ -343,7 +363,7 @@ class Emulator:
         
         self.compute_forwarding_table()
 
-        if True or self.forwarding_table != getattr(self, 'last_printed_forwarding_table', None):
+        if self.forwarding_table != getattr(self, 'last_printed_forwarding_table', None):
             debug_print("printing forwarding table")
             for key, (val, _, _) in self.forwarding_table.items():
                 debug_print(f"- ({key}, {val})")
@@ -390,7 +410,7 @@ class Emulator:
             #encoding and sending to the next hop
             binary = encode_packet(packet)
             debug_print(f"sending {repr(packet)} to {repr(next_hop)}")
-            socket.sendto(binary, next_hop)
+            socket.sendto(binary, (next_hop.split(':')[0], int(next_hop.split(':')[1])))
         else:
             self.log_event(packet,f"Packet dropped: destination {destination} lost due to loss probability")
     

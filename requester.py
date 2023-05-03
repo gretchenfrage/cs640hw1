@@ -114,6 +114,10 @@ def print_receiver_packet_summary(packet, received_from, stats):
     address = received_from[0] + ":" + str(received_from[1])
     total_duration = stats[address].end_time - stats[address].start_time
     total_duration_secs = total_duration.total_seconds()
+    debug_print(f"{stats[address].end_time=}")
+    debug_print(f"{stats[address].start_time=}")
+    debug_print(f"{total_duration=}")
+    debug_print(f"{total_duration_secs=}")
 
     print(f"Summary")
     print(f"sender addr:            {received_from[0]}:{received_from[1]}")
