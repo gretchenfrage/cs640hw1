@@ -32,7 +32,7 @@ def should_drop_debug_thing(packet):
 
 # ==== additional debug stuff ====
 
-DEBUG_PRINT = False
+DEBUG_PRINT = True
 
 def debug_print(s):
     if DEBUG_PRINT:
@@ -54,6 +54,11 @@ def resolve_ip(resolvable):
     try:
         # case that it is already an IP address
         IPv4Address(resolvable)
+
+        # funnie hack
+        if resolvable == '127.0.0.1':
+            return get_host_ip()
+
         return resolvable
     except AddressValueError:
         # otherwise assume is a host name
@@ -429,7 +434,6 @@ def encode_link_state_packet(packet):
         # number of neighbors
         len(packet.neighbors),
     )
-    print(f"{repr(header)=}")
     struct.pack_into(LINK_STATE_HEADER_FORMAT, buf, 0, *header)
 
     # pack link info elements
