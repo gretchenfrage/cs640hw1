@@ -114,6 +114,10 @@ def print_receiver_packet_summary(packet, received_from, stats):
     address = received_from[0] + ":" + str(received_from[1])
     total_duration = stats[address].end_time - stats[address].start_time
     total_duration_secs = total_duration.total_seconds()
+    debug_print(f"{stats[address].end_time=}")
+    debug_print(f"{stats[address].start_time=}")
+    debug_print(f"{total_duration=}")
+    debug_print(f"{total_duration_secs=}")
 
     print(f"Summary")
     print(f"sender addr:            {received_from[0]}:{received_from[1]}")
@@ -172,7 +176,7 @@ def request(args):
                 window_size=args.window_size,
             ))
             binary = encode_packet(packet)
-            debug_print(f"sending {repr(packet)}")
+            debug_print(f"sending {repr(packet)} to {repr(net_send_to)}")
             socket.sendto(binary, net_send_to)
 
             # receive response
@@ -196,6 +200,10 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
         binary, remote_addr = socket.recvfrom(6000)
         packet = decode_packet(binary)
         
+        if packet.packet_type != LinkPacketType.OUTER:
+            #print(f"requester ignoring router packet: {repr(packet)}")
+            continue
+
         # "Verify that the destination IP address in the packet is indeed its
         # own IP address"
         if not (

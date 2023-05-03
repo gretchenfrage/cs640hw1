@@ -255,6 +255,9 @@ class PacketSeqSender:
                 # it must be an ack packet
                 binary, remote_addr = received
                 packet = decode_packet(binary)
+                if packet.packet_type != LinkPacketType.OUTER:
+                    #debug_print(f"sender ignoring router packet: {repr(packet)}")
+                    continue
                 assert (
                     packet.inner.packet_type == PacketType.ACK
                 ), f"sender received non-ack packet: {repr(packet)}"
@@ -328,8 +331,15 @@ def run_sender(args):
     # while True:
     # "The length parameter will always be less than 5KB."
     # 6000 bytes to allow header and to be safe
-    binary, remote_addr = socket.recvfrom(6000)
-    packet = decode_packet(binary)
+    while True:
+        binary, remote_addr = socket.recvfrom(6000)
+        packet = decode_packet(binary)
+        if packet.packet_type == LinkPacketType.OUTER:
+            break
+        else:
+            pass
+            #debug_print(f"sender ignoring router packet: {repr(packet)}")
+
     assert (
         packet.inner.packet_type == PacketType.REQUEST
     ), f"sender received non-request packet: {repr(packet)}"
