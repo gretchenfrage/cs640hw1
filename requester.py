@@ -154,6 +154,7 @@ def request(args):
     socket.bind(("0.0.0.0", args.port))
     src_ip_address, src_port = socket.getsockname()
     net_send_to = (args.net_hostname, args.net_port)
+    socket = HeartbeatSocket(socket, net_send_to)
 
     # begin download from each sender to the file
     stats = {}
@@ -177,7 +178,7 @@ def request(args):
             ))
             binary = encode_packet(packet)
             debug_print(f"sending {repr(packet)} to {repr(net_send_to)}")
-            socket.sendto(binary, net_send_to)
+            socket.socket.sendto(binary, net_send_to)
 
             # receive response
             receive_from(
@@ -197,7 +198,7 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
     while not ended:
         # "The length parameter will always be less than 5KB."
         # 6000 bytes to allow header and to be safe
-        binary, remote_addr = socket.recvfrom(6000)
+        binary, remote_addr = socket.recv()
         packet = decode_packet(binary)
         
         if packet.packet_type != LinkPacketType.OUTER:
@@ -229,7 +230,7 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
             ack_binary = encode_packet(ack_packet)
             if not should_drop_debug_thing(ack_packet):
                 debug_print(f"sending {repr(ack_packet)}")
-                socket.sendto(ack_binary, net_send_to)
+                socket.socket.sendto(ack_binary, net_send_to)
 
             # ignore packet if older than current window
             if packet.inner.sequence_num < window_sequence_num_start:
