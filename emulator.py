@@ -23,9 +23,15 @@ def parse_cli_args():
     '''
     parser = ArgumentParser(prog='emulator')
     parser.add_argument('-p', dest='bind_to_port', metavar='port', required=True, type=int)
-    parser.add_argument('-q', dest='queue_size', metavar='queue_size', required=True, type=int)
-    parser.add_argument('-l', dest='log_file_name', metavar='log', required=True, type=str)
-    return parser.parse_args()
+    parser.add_argument('-q', dest='queue_size', metavar='queue_size', required=False, type=int)
+    parser.add_argument('-l', dest='log_file_name', metavar='log', required=False, type=str)
+    parser.add_argument('-f', dest='topology_file_name', metavar='filename', required=True, type=str)
+    args = parser.parse_args()
+    if not args.queue_size:
+        args.queue_size = 100
+    if not args.log_file_name:
+        args.log_file_name = 'logfile'
+    return args
 
 DelayedPacket = namedtuple('DelayedPacket', [
     'packet',
@@ -52,7 +58,7 @@ def debug_log_sendto(packet, target):
     #debug_print(f"[SEND] {target} {packet}")
 
 class Emulator:
-    def __init__(self, hostname, port, queue_size, log_file_name):
+    def __init__(self, hostname, port, queue_size, log_file_name, topology_file_name):
         self.emul_hostname = hostname
         self.emul_port = port
         self.queue_size = queue_size
@@ -66,7 +72,7 @@ class Emulator:
         self.nodes_link_state = defaultdict(NodeLinkState)
 
         # mapping from (ip address string, port int) to DirectLink
-        self.direct_links = self.read_direct_links(hostname, port)
+        self.direct_links = self.read_direct_links(hostname, port, topology_file_name)
 
         self.interval_of_transmission = 1
         self.last_transmitted = None
@@ -84,11 +90,11 @@ class Emulator:
             open(log_file_name, "w").close()
         return log_file_name
 
-    def read_direct_links(self, my_hostname, my_port):
+    def read_direct_links(self, my_hostname, my_port, topology_file_name):
         now = time.time()
 
         meeeee = (resolve_ip(my_hostname), my_port)
-        with open('topology.txt', 'r') as f:
+        with open(topology_file_name, 'r') as f:
             for line in f.readlines():
                 parts = line.split(' ')
                 parts = [part.split(',') for part in parts]
@@ -234,7 +240,7 @@ class Emulator:
                 debug_print(f"sending routetrace packet {repr(packet)} to {repr(next_hop)}")
                 socket.sendto(binary, (next_hop.split(':')[0], int(next_hop.split(':')[1])))
             else:
-                debug_print(f"No forwarding entry found for routetrace packet {packet=}")
+                debug_print(f"no forwarding entry found for routetrace packet {packet=}")
 
     def handle_heartbeat_packet(self, packet, received_from):
         if received_from not in self.direct_links:
@@ -484,6 +490,7 @@ def run_emulator(args):
         port=args.bind_to_port,
         queue_size=args.queue_size,
         log_file_name=args.log_file_name,
+        topology_file_name=args.topology_file_name,
     )
 
     #binding the emulator to the port.
