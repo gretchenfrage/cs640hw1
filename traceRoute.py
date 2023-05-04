@@ -30,7 +30,7 @@ def main():
     # Get the IP address
     routeTrace_ip_address = socket.gethostbyname(routeTrace_hostname)
     routeTrace_port = args.port
-
+    count = 0
     
     while True:
 
@@ -42,10 +42,10 @@ def main():
         binary = encode_packet(packet)
         sock.sendto(binary,(args.src_host, args.src_port))
 
-        #TODO: debugging
+
         if args.debug==1:
-            print(f'TTL={packet.TTL} src address (traceRoute) : {routeTrace_ip_address}:{routeTrace_port} '
-                  f'dst={args.dest_host}:{args.dest_port}')
+            print(f'TTL={packet.TTL} src address = {args.src_host}:{args.src_port} '
+                  f'dest address ={args.dest_host}:{args.dest_port}')
     
 
         # Wait for a response
@@ -57,10 +57,14 @@ def main():
         response_ip_address = packet.src_ip_address
         response_ip_port = packet.src_port
 
-        #TODO: debugging
-        if args.debug==1:
-            print(f'TTL={packet.TTL} responded packet address : {response_ip_address}:{response_ip_port} '
-                  f'traceroute={packet.dst_ip_address}:{packet.dst_port}')
+        # #TODO: debugging
+        # if args.debug==1:
+        if(count == 0):
+            print(f'Hop# IP Port' )
+        count = count+1
+        print(f'{count} {response_ip_address} {response_ip_port}' )
+        # print(f'TTL={packet.TTL} responded packet address : {response_ip_address}:{response_ip_port} '
+        #           f'traceroute={packet.dst_ip_address}:{packet.dst_port}')
 
         if(response_ip_address == args.dest_host and response_ip_port == args.dest_port):
             break
