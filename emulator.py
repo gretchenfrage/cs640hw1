@@ -39,8 +39,10 @@ class NodeLinkState:
         # TODO: expiration something
 
 class DirectLink:
-    def __init__(self):
-        pass
+    def __init__(self, last_heartbeat):
+        self.last_heartbeat = last_heartbeat
+        self.last_sent_heartbeat = 0
+        self.is_online = True
 
 class Emulator:
     def __init__(self, hostname, port, queue_size, log_file_name):
@@ -63,6 +65,9 @@ class Emulator:
         self.last_transmitted = None
         self.current_my_seq_no = 0
 
+        self.link_send_heartbeat_interval = 1
+        self.link_timeout_period = 5
+
         debug_print(f"{self.direct_links=}")
 
 
@@ -73,6 +78,8 @@ class Emulator:
         return log_file_name
 
     def read_direct_links(self, my_hostname, my_port):
+        now = time.time()
+
         meeeee = (resolve_ip(my_hostname), my_port)
         with open('topology.txt', 'r') as f:
             for line in f.readlines():
@@ -83,7 +90,7 @@ class Emulator:
 
                 if parts[0] == meeeee:
                     return {
-                        part: DirectLink()
+                        part: DirectLink(now)
                         for part in parts[1:]
                     }
         raise Exception(
@@ -157,11 +164,14 @@ class Emulator:
         }
 
     def handle_link_packet(self, packet, received_from, binary, socket):
+        # running this on any packet so that any packet received over link is counted as keeping connection alive
+        # a nice property
+        self.handle_heartbeat_packet(packet, received_from)
+        
         if packet.packet_type == LinkPacketType.OUTER:
             self.routing(packet)
         elif packet.packet_type == LinkPacketType.HEARTBEAT:
-            # TODO link state routing logic
-            raise Exception('unimplemented')
+            pass
         elif packet.packet_type == LinkPacketType.LINKSTATE:
             self.handle_link_state_packet(packet, received_from, binary, socket)
         elif packet.packet_type == LinkPacketType.ROUTETRACE:
@@ -207,6 +217,13 @@ class Emulator:
                 socket.sendto(binary, (next_hop.split(':')[0], int(next_hop.split(':')[1])))
             else:
                 debug_print(f"No forwarding entry found for routetrace packet {packet=}")
+
+    def handle_heartbeat_packet(self, packet, received_from):
+        direct_link = self.direct_links[received_from]
+        direct_link.last_heartbeat = time.time()
+        if not direct_link.is_online:
+            direct_link.is_online = True
+            debug_print(f"direct_link {repr(received_from)} is now back online")
 
     def handle_link_state_packet(self, packet, received_from, binary, socket):
         # lookup entry (create if necessary)
@@ -299,7 +316,7 @@ class Emulator:
         if dont_drop:
             #encoding and sending to the next hop
             binary = encode_packet(packet)
-            debug_print(f"sending {repr(packet)} to {repr(next_hop)}")
+            #debug_print(f"sending {repr(packet)} to {repr(next_hop)}")
             socket.sendto(binary, (next_hop.split(':')[0], int(next_hop.split(':')[1])))
         else:
             self.log_event(packet,f"Packet dropped: destination {destination} lost due to loss probability")
@@ -331,8 +348,20 @@ class Emulator:
         # this gets called constantly
         # so naive busy-polling logic can simply go in here :)
         
-        # periodic transmission of link state packet
         now = time.time()
+        
+        # heartbeat stuff with direct links
+        for send_to, direct_link in self.direct_links.items():
+            # periodically send heartbeat to links
+            if now - direct_link.last_sent_heartbeat > self.link_send_heartbeat_interval:
+                socket.sendto(encode_packet(HeartbeatPacket()), send_to)
+
+            # and detect if the link hasn't sent myself a heartbeat in too long
+            if direct_link.is_online and now - direct_link.last_heartbeat > self.link_timeout_period:
+                direct_link.is_online = False
+                debug_print(f"direct link {repr(send_to)} has gone offline")
+
+        # periodic transmission of link state packet
         if self.last_transmitted is None or now - self.last_transmitted >= self.interval_of_transmission:
             self.last_transmitted = now
 
@@ -349,7 +378,8 @@ class Emulator:
                         port=direct_link[1],
                         cost=1.0,
                     )
-                    for direct_link in self.direct_links.keys()
+                    for direct_link, direct_link_obj in self.direct_links.items()
+                    if direct_link_obj.is_online
                 ]
             )
             ls_binary = encode_packet(ls_packet)

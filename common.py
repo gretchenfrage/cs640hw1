@@ -4,7 +4,7 @@ from collections import namedtuple
 from ipaddress import IPv4Address, AddressValueError
 from socket import gethostbyname, gethostname
 import struct
-
+import time
 
 # ==== "should drop" ====
 
@@ -63,6 +63,47 @@ def resolve_ip(resolvable):
     except AddressValueError:
         # otherwise assume is a host name
         return gethostbyname(resolvable)
+
+
+# ==== heartbeat socket ====
+
+class HeartbeatSocket:
+    ''' Wrapper around a UDP socket and a single remote address that handles
+    sending heartbeats.
+    '''
+
+    def __init__(self, socket, sendto):
+        self.socket = socket
+        self.sendto = sendto
+        self.heartbeat_interval = 1
+        self.__send_heartbeat()
+
+    def __send_heartbeat(self):
+        debug_print("sending heartbeat")
+        self.socket.sendto(encode_packet(HeartbeatPacket()), self.sendto)
+        self.next_heartbeat = time.time() + self.heartbeat_interval
+
+    def recv(self, deadline=None):
+        while True:
+            now = time.time()
+
+            if now >= self.next_heartbeat:
+                self.__send_heartbeat()
+
+            if deadline is not None and deadline < self.next_heartbeat:
+                timeout_at = deadline
+                return_none = True
+            else:
+                timeout_at = self.next_heartbeat
+                return_none = False
+
+            self.socket.settimeout(max(timeout_at - now, 0))
+
+            try:
+                return self.socket.recvfrom(6000)
+            except (TimeoutError, BlockingIOError):
+                if return_none:
+                    return None
 
 
 # ==== packets ====

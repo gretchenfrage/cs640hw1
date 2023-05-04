@@ -91,20 +91,6 @@ def print_sender_packet(packet, send_to):
     print()
 
 
-def socket_recvfrom_deadline(socket, deadline):
-    ''' Like `socket.recvfrom(6000)`, but times out at instant `deadline` and
-    returns `None`.
-    '''
-    now = time()
-    socket.settimeout(max(deadline - now, 0))
-    try:
-        return socket.recvfrom(6000)
-    except (TimeoutError, BlockingIOError):
-        return None
-    else:
-        return None
-
-
 class WindowListItem:
     def __init__(self, data_packet):
         self.data_packet = data_packet
@@ -172,7 +158,7 @@ class PacketSeqSender:
         packet = OuterPacket(
             priority=self.priority,
             src_ip_address=get_host_ip(),
-            src_port=self.socket.getsockname()[1],
+            src_port=self.socket.socket.getsockname()[1],
             dst_ip_address=self.dst_addr,
             dst_port=self.dst_port,
             inner=packet,
@@ -183,7 +169,7 @@ class PacketSeqSender:
 
         if not should_drop_debug_thing(packet):
             debug_print(f"sending {repr(packet)}")
-            self.socket.sendto(binary, self.send_to)
+            self.socket.socket.sendto(binary, self.send_to)
 
     def __reset_window_state(self):
         # list of WindowListItem, containing each packet in the current window
@@ -219,7 +205,8 @@ class PacketSeqSender:
             # - next window queue item reaches deadline
             # - receive a packet
             deadline = next_unacked.sent + self.timeout
-            received = socket_recvfrom_deadline(self.socket, deadline)
+            #received = socket_recvfrom_deadline(self.socket, deadline)
+            received = self.socket.recv(deadline)
 
             if received is None:
                 list_item = self.window_list[next_unacked.index]
@@ -324,6 +311,8 @@ def run_sender(args):
     # setup
     socket = create_socket(AF_INET, SOCK_DGRAM)
     socket.bind(("0.0.0.0", args.bind_to_port))
+
+    socket = HeartbeatSocket(socket, (args.net_hostname, args.net_port))
     
     rate_limiter = RateLimiter(args.send_rate)
 
@@ -332,7 +321,7 @@ def run_sender(args):
     # "The length parameter will always be less than 5KB."
     # 6000 bytes to allow header and to be safe
     while True:
-        binary, remote_addr = socket.recvfrom(6000)
+        binary, remote_addr = socket.recv()
         packet = decode_packet(binary)
         if packet.packet_type == LinkPacketType.OUTER:
             break
