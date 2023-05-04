@@ -44,13 +44,21 @@ def main():
 
 
         if args.debug==1:
-            print(f'TTL={packet.TTL} src address = {args.src_host}:{args.src_port} '
-                  f'dest address ={args.dest_host}:{args.dest_port}')
+            print(f"[debug] send to {args.src_host}:{args.src_port}")
+            print(f"        packet (TTL={packet.TTL}, src={packet.src_ip_address}:{packet.src_port}, dest={packet.dst_ip_address}:{packet.dst_port})")
+            #print(f'[debug: send]    TTL={packet.TTL} src={args.src_host}:{args.src_port} '
+            #      f'dest={args.dest_host}:{args.dest_port}')
     
 
         # Wait for a response
         binary, remote_addr = sock.recvfrom(6000)
         packet = decode_packet(binary)
+
+        if args.debug==1:
+            print(f"[debug] receive from {remote_addr[0]}:{remote_addr[1]}")
+            print(f"        packet (TTL={packet.TTL}, src={packet.src_ip_address}:{packet.src_port}, dest={packet.dst_ip_address}:{packet.dst_port})")
+            #print(f'[debug: receive] TTL={packet.TTL} src={args.src_host}:{args.src_port} '
+            #      f'dest={args.dest_host}:{args.dest_port}')
 
 
         #doubt: does it have to be src_ip_address only can we have different packet for this return output.

@@ -123,7 +123,10 @@ def print_receiver_packet_summary(packet, received_from, stats):
     print(f"sender addr:            {received_from[0]}:{received_from[1]}")
     print(f"Total Data packets:     {stats[address].data_packets}")
     print(f"Total Data bytes:       {stats[address].data_bytes}")
-    avg_pps = stats[address].data_packets / total_duration_secs
+    if total_duration_secs:
+        avg_pps = stats[address].data_packets / total_duration_secs
+    else:
+        avg_pps = 9999999999
     avg_pps = int(round(avg_pps))
     print(f"Average packets/second: {avg_pps}")
     print(f"Duration of the test:   {total_duration_secs * 1000} ms")
@@ -209,7 +212,7 @@ def receive_from(file, socket, net_send_to, encapsulate, window_size, stats):
         # own IP address"
         if not (
             packet.dst_ip_address == get_host_ip()
-            and packet.dst_port == socket.getsockname()[1]
+            and packet.dst_port == socket.socket.getsockname()[1]
         ):
             # just ignoring for now, possibly it would be better to error
             continue

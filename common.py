@@ -92,7 +92,7 @@ class HeartbeatSocket:
         self.__send_heartbeat()
 
     def __send_heartbeat(self):
-        debug_print("sending heartbeat")
+        #debug_print("sending heartbeat")
         self.socket.sendto(encode_packet(HeartbeatPacket()), self.sendto)
         self.next_heartbeat = time.time() + self.heartbeat_interval
 

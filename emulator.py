@@ -91,6 +91,8 @@ class Emulator:
         return log_file_name
 
     def read_direct_links(self, my_hostname, my_port, topology_file_name):
+        # the "readtopology" function
+
         now = time.time()
 
         meeeee = (resolve_ip(my_hostname), my_port)
@@ -112,6 +114,7 @@ class Emulator:
 
     def compute_forwarding_table(self):
         ''' Compute forwarding table from self.nodes_link_state. '''
+        # the "buildForwardTable" function
 
         now = time.time()
 
@@ -206,6 +209,8 @@ class Emulator:
             raise Exception(f"unknown packet type for emulator: {repr(packet)}")
 
     def routeTraceFrwding(self, packet, socket):
+        # the "forwardpacket" function specifically for routetrace packets
+        # outer packets as in the previous assignments are handled in the other one
         if packet.TTL == 0:
             received_ip_address = packet.src_ip_address
             received_port = packet.src_port
@@ -252,6 +257,9 @@ class Emulator:
             debug_print(f"[LINK UP] {repr(received_from)} {direct_link.last_heartbeat=}")
 
     def handle_link_state_packet(self, packet, received_from, binary, socket):
+        # I guess this would be the "createroutes" function?
+        # one way or the other, we've implemented the functionality in an isomorphic way
+
         # lookup entry (create if necessary)
         node_link_state = self.nodes_link_state[(packet.creator_ip_address, packet.creator_port)]
 

@@ -51,7 +51,7 @@ class RateLimiter:
         ''' Sleep until a rate-limited event is allowed to occur, and then
         update internal state to represent that it has occurred.
         '''
-        now = time()
+        now = time.time()
         if self.blocked_until is not None and now < self.blocked_until:
             sleep(self.blocked_until - now)
             self.blocked_until += self.delay
@@ -229,7 +229,7 @@ class PacketSeqSender:
                     
                     # reinsert it into the back of the window queue
                     # (with new sent time)
-                    next_unacked.sent = time()
+                    next_unacked.sent = time.time()
                     self.window_queue.put_nowait(next_unacked)
                     next_unacked = self.__pop_next_unacked()
 
@@ -274,7 +274,7 @@ class PacketSeqSender:
         
         # send (including rate limiting)
         self.__send_packet_inner(data_packet)
-        now = time()
+        now = time.time()
 
         # update windowing data structures
         list_index = len(self.window_list)
