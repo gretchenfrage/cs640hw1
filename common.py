@@ -34,9 +34,22 @@ def should_drop_debug_thing(packet):
 
 DEBUG_PRINT = True
 
+def timestamp():
+    return '{:.2f}'.format(time.time())
+    return str(time.time())
+
+    now = time.time()
+    now1 = str(int(now - now % 1.0))
+    now2 = ''
+    for i in range(len(now1)):
+        now2 = now1[-i] + now2
+        if i % 3 == 1:
+            now2 = ',' + now2
+    return now2 + '{:.2f}'.format(now % 1.0)
+
 def debug_print(s):
     if DEBUG_PRINT:
-        print(s)
+        print(f"t={timestamp()} {s}")
 
 
 # ==== network utilities ====
@@ -291,7 +304,7 @@ LinkStatePacket = link_packet_data_type('LinkStatePacket', [
 ])
 
 ''' Neighbor link information within a LinkStatePacket. '''
-LinkInfo = namedtuple('NeighborLinkInfo', [
+LinkInfo = namedtuple('LinkInfo', [
     'ip_address',
     'port',
     'cost', # float
@@ -477,6 +490,7 @@ def encode_link_state_packet(packet):
 
     # pack link info elements
     for link_info in packet.neighbors:
+        assert (isinstance(link_info, LinkInfo))
 
         link_info_buf = bytearray(LINK_INFO_SIZE)
         link_info_args = (
@@ -783,3 +797,29 @@ if __name__ == '__main__':
     decoded = decode_packet(encoded)
     print(f"decoded = {repr(decoded)}")
     assert (packet == decoded)
+
+    packet = LinkStatePacket(
+        creator_ip_address='127.0.0.1',
+        creator_port=3005,
+        seq_no=4,
+        expires=1683222404.096735,
+        neighbors=[
+            LinkInfo(
+                ip_address='127.0.0.1',
+                port=3002,
+                cost=1.0,
+            ),
+            LinkInfo(
+                ip_address='127.0.0.1',
+                port=3004,
+                cost=1.0,
+            ),
+        ],
+    ) 
+    print(f"packet = {repr(packet)}")
+    encoded = encode_packet(packet)
+    print(f"encoded = {repr(encoded)}")
+    decoded = decode_packet(encoded)
+    print(f"decoded = {repr(decoded)}")
+    assert (packet == decoded)
+

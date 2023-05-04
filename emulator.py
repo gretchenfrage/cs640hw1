@@ -47,6 +47,10 @@ class DirectLink:
         self.last_sent_heartbeat = 0
         self.is_online = True
 
+def debug_log_sendto(packet, target):
+    pass
+    #debug_print(f"[SEND] {target} {packet}")
+
 class Emulator:
     def __init__(self, hostname, port, queue_size, log_file_name):
         self.emul_hostname = hostname
@@ -64,12 +68,12 @@ class Emulator:
         # mapping from (ip address string, port int) to DirectLink
         self.direct_links = self.read_direct_links(hostname, port)
 
-        self.interval_of_transmission = 0.1
+        self.interval_of_transmission = 1
         self.last_transmitted = None
         self.current_my_seq_no = 0
 
-        self.link_send_heartbeat_interval = 0.1
-        self.link_timeout_period = 1
+        self.link_send_heartbeat_interval = 1
+        self.link_timeout_period = 3
 
         debug_print(f"{self.direct_links=}")
 
@@ -113,11 +117,11 @@ class Emulator:
             if node_link_state.is_fresh:
                 if node_link_state.expires is not None and node_link_state.expires < now:
                     node_link_state.is_fresh = False
-                    debug_print(f"node link state {a} expired")
+                    debug_print(f"[EXPIRED] {a} {node_link_state.expires=}")
             else:
                 if node_link_state.expires >= now:
                     node_link_state.is_fresh = True
-                    debug_print(f"node link state {a} un-expired")
+                    debug_print(f"[UN-EXPIRED] {a} {node_link_state.expires=}")
 
             if node_link_state.is_fresh:
                 for neighbor in node_link_state.neighbors:
@@ -233,19 +237,27 @@ class Emulator:
                 debug_print(f"No forwarding entry found for routetrace packet {packet=}")
 
     def handle_heartbeat_packet(self, packet, received_from):
+        if received_from not in self.direct_links:
+            return
         direct_link = self.direct_links[received_from]
         direct_link.last_heartbeat = time.time()
         if not direct_link.is_online:
             direct_link.is_online = True
-            debug_print(f"direct_link {repr(received_from)} is now back online")
+            debug_print(f"[LINK UP] {repr(received_from)} {direct_link.last_heartbeat=}")
 
     def handle_link_state_packet(self, packet, received_from, binary, socket):
         # lookup entry (create if necessary)
         node_link_state = self.nodes_link_state[(packet.creator_ip_address, packet.creator_port)]
+
+        #debug_print(f"received link state packet {packet} from {received_from}")
         
         # short-circuit if new packet of date
         if packet.seq_no <= node_link_state.seq_no:
+            #debug_print(f"ignoring link state packet because it's out of date {packet=} {node_link_state=} {packet.seq_no=} {node_link_state.seq_no=}")
             return
+        else:
+            pass
+            #debug_print(f"link state packet is not out of date  {packet=} {node_link_state=} {packet.seq_no=} {node_link_state.seq_no=}")
 
         # update internal entry
         node_link_state.seq_no = packet.seq_no
@@ -261,6 +273,7 @@ class Emulator:
                 #debug_print(f"not flooding to {repr(direct_link)} because that's who I received it from")
                 direct_link_match_counter += 1
             #debug_print(f"flooding-relaying to {repr(direct_link)}: {repr(packet)}")
+            debug_log_sendto(packet, direct_link)
             socket.sendto(binary, direct_link)
 
         if direct_link_match_counter != 1:
@@ -306,6 +319,7 @@ class Emulator:
         self.compute_forwarding_table()
 
         if self.forwarding_table != getattr(self, 'last_printed_forwarding_table', None):
+            debug_print("")
             debug_print("printing forwarding table")
             for key, (val, _, _) in self.forwarding_table.items():
                 debug_print(f"- ({key}, {val})")
@@ -389,12 +403,13 @@ class Emulator:
         for send_to, direct_link in self.direct_links.items():
             # periodically send heartbeat to links
             if now - direct_link.last_sent_heartbeat > self.link_send_heartbeat_interval:
+                direct_link.last_sent_heartbeat = now # AAAAAAAAAAAAAAAAAAAAAAAAAA there we goes
                 socket.sendto(encode_packet(HeartbeatPacket()), send_to)
 
             # and detect if the link hasn't sent myself a heartbeat in too long
             if direct_link.is_online and now - direct_link.last_heartbeat > self.link_timeout_period:
                 direct_link.is_online = False
-                debug_print(f"direct link {repr(send_to)} has gone offline")
+                debug_print(f"[LINK DOWN] {repr(send_to)} {direct_link.last_heartbeat}")
 
         # periodic transmission of link state packet
         if self.last_transmitted is None or now - self.last_transmitted >= self.interval_of_transmission:
@@ -406,7 +421,7 @@ class Emulator:
                 creator_ip_address=resolve_ip(self.emul_hostname),
                 creator_port=self.emul_port,
                 seq_no=self.current_my_seq_no,
-                expires=now + 1,
+                expires=now + 3,
                 neighbors=[
                     LinkInfo(
                         ip_address=direct_link[0],
@@ -420,6 +435,8 @@ class Emulator:
             ls_binary = encode_packet(ls_packet)
 
             for direct_link in self.direct_links.keys():
+                #debug_print(f"sending ls packet {ls_packet} to {direct_link}")
+                debug_log_sendto(ls_packet, direct_link)
                 socket.sendto(ls_binary, direct_link)
 
             my_node_link_state = self.nodes_link_state[(resolve_ip(self.emul_hostname), self.emul_port)]
@@ -475,6 +492,7 @@ def run_emulator(args):
         try:
             binary, remote_addr = socket.recvfrom(6000) 
             packet = decode_packet(binary)
+            #debug_print(f"[RECV] {remote_addr} {packet}")
             emulator.handle_link_packet(packet, remote_addr, binary, socket)
         except BlockingIOError:
             time.sleep(0.01)
