@@ -17,6 +17,9 @@ def main():
 
     args = parser.parse_args()
 
+    args.src_host = resolve_ip(args.src_host)
+    args.dest_host = resolve_ip(args.dest_host)
+
     ttl = 0
     sock = create_socket(AF_INET, SOCK_DGRAM)
     sock.bind(("0.0.0.0", args.port))
@@ -41,12 +44,12 @@ def main():
 
         #TODO: debugging
         if args.debug==1:
-            print(f'TTL={packet.TTL} src address (traceRoute) : {routeTrace_ip_address}:{routeTrace_port}'
+            print(f'TTL={packet.TTL} src address (traceRoute) : {routeTrace_ip_address}:{routeTrace_port} '
                   f'dst={args.dest_host}:{args.dest_port}')
     
 
         # Wait for a response
-        binary, remote_addr = socket.recvfrom(6000)
+        binary, remote_addr = sock.recvfrom(6000)
         packet = decode_packet(binary)
 
 
@@ -56,8 +59,8 @@ def main():
 
         #TODO: debugging
         if args.debug==1:
-            print(f'TTL={packet.TTL} responded packet address : {response_ip_address}+:{response_ip_port}'
-                  f'traceroute={packet.dest_ip_address}:{packet.dest_port}')
+            print(f'TTL={packet.TTL} responded packet address : {response_ip_address}:{response_ip_port} '
+                  f'traceroute={packet.dst_ip_address}:{packet.dst_port}')
 
         if(response_ip_address == args.dest_host and response_ip_port == args.dest_port):
             break

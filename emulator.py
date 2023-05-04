@@ -166,27 +166,47 @@ class Emulator:
             self.handle_link_state_packet(packet, received_from, binary, socket)
         elif packet.packet_type == LinkPacketType.ROUTETRACE:
             # TODO routetrace logic
-            self.routeTraceFrwding(packet)
+            self.routeTraceFrwding(packet, socket)
             # raise Exception('unimplemented')
         else:
             raise Exception(f"unknown packet type for emulator: {repr(packet)}")
 
-    def routeTraceFrwding(self, packet):
+    def routeTraceFrwding(self, packet, socket):
         if packet.TTL == 0:
-            received_ip_address = packet.src_ip_addres
+            received_ip_address = packet.src_ip_address
             received_port = packet.src_port
             # Create a new routetrace packet with the emulator's IP and port as the source address
-            new_packet = RouteTracePacket( TTL=packet.TTL, src_ip_address=self.emul_hostname, src_port=self.emul_port, 
+            new_packet = RouteTracePacket( TTL=packet.TTL, src_ip_address=get_host_ip(), src_port=self.emul_port, 
                           dst_ip_address=packet.dst_ip_address, dst_port=packet.dst_port)
-            self.send_packet(new_packet,(received_ip_address,received_port))
+            
+            #self.send_packet(new_packet,(received_ip_address,received_port))
+            binary = encode_packet(new_packet)
+            debug_print(f"sending routetrace packet response {repr(packet)} to {repr((received_ip_address,received_port))}")
+            socket.sendto(binary, (received_ip_address,received_port))
         else:
             # Decrement the TTL value in the packet and forward it to the next hop based on the routing table
-            packet.TTL -= 1
+            #packet.TTL -= 1
+            packet = RouteTracePacket(
+                TTL=packet.TTL - 1,
+                src_ip_address=packet.src_ip_address,
+                src_port=packet.src_port,
+                dst_ip_address=packet.dst_ip_address,
+                dst_port=packet.dst_port,
+            )
 
             #TODO: need to get the next shortest hop 
             # next_hop = self.(packet.dest_ip)
-            next_hop = (a,b)
-            self.send_packet(packet, next_hop)
+            #next_hop = (a,b)
+            #self.send_packet(packet, next_hop)
+
+            destination = packet.dst_ip_address + ":" + str(packet.dst_port)
+            if destination in self.forwarding_table:
+                next_hop = self.forwarding_table[destination][0]
+                binary = encode_packet(packet)
+                debug_print(f"sending routetrace packet {repr(packet)} to {repr(next_hop)}")
+                socket.sendto(binary, (next_hop.split(':')[0], int(next_hop.split(':')[1])))
+            else:
+                debug_print(f"No forwarding entry found for routetrace packet {packet=}")
 
     def handle_link_state_packet(self, packet, received_from, binary, socket):
         # lookup entry (create if necessary)
