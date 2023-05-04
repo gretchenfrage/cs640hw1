@@ -36,6 +36,8 @@ class NodeLinkState:
         # highest ever known seq no
         self.seq_no = -1
         self.neighbors = []
+        self.expires = None
+        self.is_fresh = True
         # TODO: expiration something
 
 class DirectLink:
@@ -61,12 +63,12 @@ class Emulator:
         # mapping from (ip address string, port int) to DirectLink
         self.direct_links = self.read_direct_links(hostname, port)
 
-        self.interval_of_transmission = 1
+        self.interval_of_transmission = 0.1
         self.last_transmitted = None
         self.current_my_seq_no = 0
 
-        self.link_send_heartbeat_interval = 1
-        self.link_timeout_period = 5
+        self.link_send_heartbeat_interval = 0.1
+        self.link_timeout_period = 1
 
         debug_print(f"{self.direct_links=}")
 
@@ -100,17 +102,28 @@ class Emulator:
     def compute_forwarding_table(self):
         ''' Compute forwarding table from self.nodes_link_state. '''
 
+        now = time.time()
 
         self.forwarding_table = {}
 
         conns = defaultdict(set)
 
         for a, node_link_state in self.nodes_link_state.items():
-            for neighbor in node_link_state.neighbors:
-                b = (neighbor.ip_address, neighbor.port)
+            if node_link_state.is_fresh:
+                if node_link_state.expires is not None and node_link_state.expires < now:
+                    node_link_state.is_fresh = False
+                    debug_print(f"node link state {a} expired")
+            else:
+                if node_link_state.expires >= now:
+                    node_link_state.is_fresh = True
+                    debug_print(f"node link state {a} un-expired")
 
-                conns[a].add((b, neighbor.cost))
-                conns[b].add((a, neighbor.cost))
+            if node_link_state.is_fresh:
+                for neighbor in node_link_state.neighbors:
+                    b = (neighbor.ip_address, neighbor.port)
+
+                    conns[a].add((b, neighbor.cost))
+                    conns[b].add((a, neighbor.cost))
 
         #debug_print(f"{conns=}")
         source = (get_host_ip(), self.emul_port)
@@ -236,6 +249,7 @@ class Emulator:
         # update internal entry
         node_link_state.seq_no = packet.seq_no
         node_link_state.neighbors = list(packet.neighbors)
+        node_link_state.expires = packet.expires
 
         # TODO recalculate routing table
 
@@ -371,7 +385,7 @@ class Emulator:
                 creator_ip_address=resolve_ip(self.emul_hostname),
                 creator_port=self.emul_port,
                 seq_no=self.current_my_seq_no,
-                expires=now + 10, # TODO idk
+                expires=now + 1,
                 neighbors=[
                     LinkInfo(
                         ip_address=direct_link[0],
