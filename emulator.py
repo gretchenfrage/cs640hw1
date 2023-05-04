@@ -5,6 +5,7 @@ from datetime import datetime
 from collections import namedtuple, defaultdict
 import random
 from heapq import heappop, heappush
+import copy
 
 from common import *
 import queue
@@ -269,18 +270,38 @@ class Emulator:
 
     def on_nodes_link_state_update(self):
 
-        if self.nodes_link_state != getattr(self, 'last_printed_nodes_link_state', None):
+        self.curr_printing_connectivity = {
+            key: [
+                f"{neighbor.ip_address}:{neighbor.port}"
+                for neighbor in val.neighbors
+            ]
+            for key, val in self.nodes_link_state.items()
+        }
+        if self.curr_printing_connectivity != getattr(self, 'last_printed_connectivity', None):
             debug_print("")
             debug_print("printing connectivity graph")
-            for key, val in self.nodes_link_state.items():
+            for key, val in self.curr_printing_connectivity.items():
                 key_str = f"{key[0]}:{str(key[1])}"
                 debug_print(f"- {key_str} has the following links:")
-                for neighbor in val.neighbors:
-                    neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
-                    debug_print(f"- - {neighbor_str}")
+                for neighbor in val:
+                    debug_print(f"- - {neighbor}")
             debug_print("")
+        self.last_printed_connectivity = copy.deepcopy(self.curr_printing_connectivity)
 
-            self.last_printed_nodes_link_state = self.nodes_link_state
+
+#        if self.nodes_link_state != getattr(self, 'last_printed_nodes_link_state', None):
+#            debug_print("")
+#            debug_print("printing connectivity graph")
+#            debug_print(f"{self.nodes_link_state=}")
+#            #for key, val in self.nodes_link_state.items():
+#            #    key_str = f"{key[0]}:{str(key[1])}"
+#            #    debug_print(f"- {key_str} has the following links:")
+#            #    for neighbor in val.neighbors:
+#            #        neighbor_str = f"{neighbor.ip_address}:{neighbor.port}"
+#            #        debug_print(f"- - {neighbor_str}")
+#            debug_print("")
+#
+#            self.last_printed_nodes_link_state = copy.deepcopy(self.nodes_link_state)
         
         self.compute_forwarding_table()
 
